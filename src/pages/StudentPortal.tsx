@@ -233,7 +233,7 @@ export default function StudentPortal() {
               <GraduationCap className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-extrabold text-teal-800">Cổng Học Sinh</h1>
-            <p className="text-teal-600 text-sm mt-1">Hệ thống giáo dục EduCenter</p>
+            <p className="text-teal-600 text-sm mt-1">Hệ thống giáo dục Lớp toán Thầy Lĩnh</p>
           </div>
 
           <form className="p-6 space-y-4">
@@ -338,7 +338,7 @@ export default function StudentPortal() {
           <div className="flex items-center gap-2 text-teal-700">
             <BookOpen className="w-8 h-8" />
             <div>
-              <h1 className="font-extrabold text-lg leading-tight">EduCenter</h1>
+              <h1 className="font-extrabold text-lg leading-tight">Lớp toán Thầy Lĩnh</h1>
               <p className="text-[10px] font-bold uppercase tracking-widest text-teal-500">Cổng Học Sinh</p>
             </div>
           </div>

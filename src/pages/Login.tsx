@@ -48,7 +48,7 @@ export default function Login() {
             <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg backdrop-blur-sm">
               <GraduationCap className="w-9 h-9 text-white" />
             </div>
-            <h1 className="text-white font-extrabold text-2xl">EduCenter</h1>
+            <h1 className="text-white font-extrabold text-2xl">Lớp toán Thầy Lĩnh</h1>
             <p className="text-white/75 text-sm mt-1">Hệ thống quản lý trung tâm</p>
           </div>
 
@@ -130,7 +130,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-white/60 text-xs mt-4">
-          © 2025 EduCenter – Powered by React + Supabase
+          © 2025 Lớp toán Thầy Lĩnh – Powered by React + Supabase
         </p>
       </div>
     </div>

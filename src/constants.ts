@@ -33,8 +33,8 @@ export const EX_TEST_DETHI_TEMPLATE = String.raw`\documentclass[12pt,a4paper]{ar
 \usepackage[top=\tren cm, bottom=\duoi cm, left=\trai cm, right=\phai cm]{geometry}
 \usepackage[loigiai]{ex_test}
 %%%%%%%%%%%%% Thông tin tiêu đề
-\def\duoitrai{Nguyễn Hữu Phúc}
-\def\duoiphai{Mr.Phuc Math}
+\def\duoitrai{Thầy Lĩnh Math}
+\def\duoiphai{Thầy Lĩnh Math}
 \usepackage[most]{tcolorbox}
 \usepackage{fancyhdr}
 \usepackage{tkz-euclide}
