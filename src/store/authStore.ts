@@ -11,6 +11,7 @@ interface AuthState {
   init: () => Promise<void>
   fetchProfile: (user: User) => Promise<void>
   login: (email: string, password: string) => Promise<void>
+  loginDemo: (userEmail?: string) => void
   logout: () => Promise<void>
 
   isAdmin: () => boolean
