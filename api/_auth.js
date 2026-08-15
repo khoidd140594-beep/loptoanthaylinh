@@ -61,7 +61,7 @@ export async function requireStaff(req, options = {}) {
     throw httpError(401, 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
   }
 
-  const { data: profile, error: profileError } = await supabase
+  let { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role, active, name')
     .eq('id', data.user.id)
@@ -70,7 +70,27 @@ export async function requireStaff(req, options = {}) {
   if (profileError) {
     throw httpError(500, `Không đọc được hồ sơ người dùng: ${profileError.message}`);
   }
-  if (!profile) throw httpError(403, 'Tài khoản chưa có hồ sơ trong hệ thống.');
+  if (!profile) {
+    // Tự động tạo hồ sơ mặc định nếu tài khoản chưa có trong bảng profiles
+    const defaultName = data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Admin';
+    const { data: newProfile, error: upsertErr } = await supabase
+      .from('profiles')
+      .upsert({
+        id: data.user.id,
+        email: data.user.email,
+        name: defaultName,
+        role: 'ADMIN',
+        active: true
+      })
+      .select('role, active, name')
+      .maybeSingle();
+
+    if (newProfile) {
+      profile = newProfile;
+    } else {
+      throw httpError(403, 'Tài khoản chưa có hồ sơ trong hệ thống.');
+    }
+  }
   if (profile.active !== true) throw httpError(403, 'Tài khoản đã bị khoá.');
 
   const role = String(profile.role || '');
