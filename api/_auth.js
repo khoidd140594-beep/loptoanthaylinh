@@ -9,8 +9,8 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://byhtuzacgtiibvomwngv.supabase.co';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 /** Vai trò được phép nhắn tin cho phụ huynh. */
 export const CAN_MESSAGE = ['ADMIN', 'TEACHER'];
@@ -24,7 +24,7 @@ export function adminClient() {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     throw httpError(
       500,
-      'Thiếu VITE_SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY trên Vercel.',
+      'Thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.',
     );
   }
 
