@@ -71,6 +71,7 @@ create table if not exists classes (
   schedule         text,
   note             text,
   status           text default 'active',
+  teacher_id       uuid references profiles(id) on delete set null,
   created_at       timestamptz default now()
 );
 
