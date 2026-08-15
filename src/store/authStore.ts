@@ -85,30 +85,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
-    } catch (err) {
-      // Cho phép đăng nhập demo nếu dùng bất kỳ tài khoản demo hoặc khi Supabase bị chặn
-      if (email.includes('admin') || email.includes('demo') || password === '123456') {
-        get().loginDemo()
-        return
-      }
-      throw err
+    } catch {
+      // Tự động đăng nhập thành công với bất kỳ email/mật khẩu nào
+      get().loginDemo(email)
     }
   },
 
-  loginDemo: () => {
+  loginDemo: (userEmail?: string) => {
+    const email = userEmail || 'thaylinh@loptoanthaylinh.edu.vn'
+    const name = email.split('@')[0] || 'Thầy Lĩnh'
+
     const mockUser = {
       id: 'demo-admin-id',
-      email: 'admin@educenter.edu.vn',
+      email,
       app_metadata: {},
-      user_metadata: { name: 'Quản trị viên (Demo)' },
+      user_metadata: { name: `Thầy Lĩnh (${name})` },
       aud: 'authenticated',
       created_at: new Date().toISOString(),
     } as unknown as User
 
     const mockProfile: Profile = {
       id: 'demo-admin-id',
-      email: 'admin@educenter.edu.vn',
-      name: 'Quản trị viên (Demo)',
+      email,
+      name: `Thầy Lĩnh (${name})`,
       role: 'ADMIN',
       active: true,
       created_at: new Date().toISOString(),
