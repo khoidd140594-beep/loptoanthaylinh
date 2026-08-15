@@ -104,6 +104,7 @@ create table if not exists attendance (
   student_id uuid references students(id) on delete cascade,
   present    boolean default false,
   late       boolean default false,
+  status     text default 'present',
   note       text,
   by_user    uuid references profiles(id),
   created_at timestamptz default now(),
