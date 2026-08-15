@@ -16,11 +16,17 @@ create table if not exists profiles (
 );
 
 -- Tự tạo profile khi user đăng ký
-create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into profiles (id, email, name, role)
-  values (new.id, new.email, new.raw_user_meta_data->>'name', 'TEACHER');
+  insert into public.profiles (id, email, name, role)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    'TEACHER'
+  )
+  on conflict (id) do update set email = excluded.email;
   return new;
 end;
 $$;
@@ -28,7 +34,7 @@ $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute procedure handle_new_user();
+  for each row execute procedure public.handle_new_user();
 
 -- ── Students ────────────────────────────────────────────────
 create table if not exists students (
