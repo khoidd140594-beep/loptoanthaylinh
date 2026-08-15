@@ -138,6 +138,15 @@ alter table email_logs enable row level security;
 alter table teacher_classes enable row level security;
 
 -- All authenticated users can read
+drop policy if exists "auth read profiles" on profiles;
+drop policy if exists "auth read students" on students;
+drop policy if exists "auth read classes" on classes;
+drop policy if exists "auth read enrollments" on enrollments;
+drop policy if exists "auth read attendance" on attendance;
+drop policy if exists "auth read payments" on payments;
+drop policy if exists "auth read email_logs" on email_logs;
+drop policy if exists "auth read tc" on teacher_classes;
+
 create policy "auth read profiles"   on profiles   for select using (auth.role() = 'authenticated');
 create policy "auth read students"   on students   for select using (auth.role() = 'authenticated');
 create policy "auth read classes"    on classes    for select using (auth.role() = 'authenticated');
@@ -148,6 +157,15 @@ create policy "auth read email_logs" on email_logs  for select using (auth.role(
 create policy "auth read tc"         on teacher_classes for select using (auth.role() = 'authenticated');
 
 -- All authenticated users can write (role-based access enforced in app layer)
+drop policy if exists "auth write students" on students;
+drop policy if exists "auth write classes" on classes;
+drop policy if exists "auth write enrollments" on enrollments;
+drop policy if exists "auth write attendance" on attendance;
+drop policy if exists "auth write payments" on payments;
+drop policy if exists "auth write email_logs" on email_logs;
+drop policy if exists "auth write tc" on teacher_classes;
+drop policy if exists "auth write profiles" on profiles;
+
 create policy "auth write students"  on students   for all using (auth.role() = 'authenticated');
 create policy "auth write classes"   on classes    for all using (auth.role() = 'authenticated');
 create policy "auth write enrollments" on enrollments for all using (auth.role() = 'authenticated');
