@@ -500,6 +500,62 @@ export default function StudentPortal() {
           </div>
         </div>
 
+        {/* ⚡ CARD NỔI BẬT: DANH SÁCH BÀI THI CẦN LÀM NGAY (HIỂN THỊ TRỰC TIẾP TRÊN ĐẦU) */}
+        <div className="bg-white rounded-3xl border-2 border-teal-500/40 p-6 space-y-4 shadow-md">
+          <div className="flex items-center justify-between pb-3 border-b border-teal-100">
+            <h3 className="font-black text-teal-900 text-lg flex items-center gap-2 uppercase tracking-wide">
+              <Sparkles className="w-5 h-5 text-amber-500" /> DANH SÁCH BÀI THI CẦN LÀM NGAY ({examRooms.filter(r => !submissions.some(s => s.room_id === r.id)).length})
+            </h3>
+            <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1 rounded-full">
+              Click "Vào làm bài" bên dưới
+            </span>
+          </div>
+
+          {examRooms.filter(r => !submissions.some(s => s.room_id === r.id)).length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              {examRooms.filter(r => !submissions.some(s => s.room_id === r.id)).map(room => (
+                <div
+                  key={room.id}
+                  className="bg-gradient-to-br from-teal-50/60 to-emerald-50/60 border-2 border-teal-200 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-2xs hover:border-teal-400 transition-all"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="font-extrabold text-gray-900 text-base leading-snug">
+                        {room.exams?.title || room.name || `Bài thi mã ${room.code}`}
+                      </h4>
+                      <span className="bg-teal-600 text-white font-mono text-xs font-bold px-2.5 py-1 rounded-lg shrink-0">
+                        {room.code}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-2 font-medium">
+                      <span className="flex items-center gap-1 text-teal-700 font-bold">
+                        <Clock className="w-3.5 h-3.5" /> {room.time_limit || room.exams?.duration || 45} phút
+                      </span>
+                      {room.classes?.class_name && (
+                        <span className="bg-white/80 border border-teal-100 text-gray-700 px-2 py-0.5 rounded">
+                          {room.classes.class_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => navigate(`/exam-room/${room.id}`)}
+                    className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-black text-xs py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all transform active:scale-98 uppercase tracking-wider"
+                  >
+                    <Play className="w-4 h-4 fill-current text-amber-300" />
+                    VÀO LÀM BÀI NGAY TRỰC TIẾP ⚡
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 text-center text-xs text-gray-500 font-medium">
+              Chưa có phòng thi mở trực tiếp. (Nếu vừa mở phòng, xin hãy F5 làm mới lại trang).
+            </div>
+          )}
+        </div>
+
         {/* Section Báo Cáo Tiến Độ & Kết Quả Học Tập */}
         <div className="bg-white rounded-3xl border border-teal-100 shadow-sm p-6 sm:p-8 space-y-6">
           
