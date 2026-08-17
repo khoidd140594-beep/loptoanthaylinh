@@ -208,11 +208,29 @@ export default function Classes() {
     )
   }, [rosterStudents, rosterSearch])
 
+  // Set các student_id đang có lớp hoạt động bất kỳ trong hệ thống
+  const activeEnrolledStudentIds = useMemo(() => {
+    return new Set(enrollments.filter(e => e.status === 'active').map(e => e.student_id))
+  }, [enrollments])
+
+  // Lọc chỉ các học sinh CHƯA PHÂN LỚP (chưa có lớp nào trong hệ thống)
+  const [onlyUnassigned, setOnlyUnassigned] = useState(true)
+
   // Danh sách học sinh chưa đăng ký lớp đang chọn
   const unenrolledStudents = useMemo(() => {
     if (!selClass) return [];
-    return students.filter(s => !enrollments.find(e => e.class_id === selClass.id && e.student_id === s.id && e.status === 'active'))
-  }, [selClass, students, enrollments])
+    return students.filter(s => {
+      // Đã thuộc lớp này thì ẩn
+      const isAlreadyInThisClass = enrollments.some(e => e.class_id === selClass.id && e.student_id === s.id && e.status === 'active');
+      if (isAlreadyInThisClass) return false;
+
+      // Nếu chỉ lọc học sinh CHƯA PHÂN LỚP: kiểm tra xem s.id có thuộc bất kỳ lớp nào không
+      if (onlyUnassigned) {
+        return !activeEnrolledStudentIds.has(s.id);
+      }
+      return true;
+    })
+  }, [selClass, students, enrollments, activeEnrolledStudentIds, onlyUnassigned])
 
   const filteredUnenrolled = useMemo(() => {
     const q = normalizeText(addStudentSearch.trim())
@@ -555,9 +573,35 @@ export default function Classes() {
         size="lg"
       >
         <div className="space-y-4">
-          <p className="text-xs text-gray-500">
-            Chọn học sinh từ danh sách bên dưới để ghi danh vào lớp <strong className="text-teal-700">{selClass?.class_name}</strong>.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-teal-50/60 p-3 rounded-xl border border-teal-100">
+            <div className="flex items-center gap-1.5 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setOnlyUnassigned(true)}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  onlyUnassigned
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                }`}
+              >
+                Chưa phân lớp ({students.filter(s => !activeEnrolledStudentIds.has(s.id)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOnlyUnassigned(false)}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  !onlyUnassigned
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                }`}
+              >
+                Tất cả học sinh chưa vào lớp này
+              </button>
+            </div>
+            <span className="text-[11px] text-teal-800 italic">
+              {onlyUnassigned ? 'Đang chỉ hiện học sinh chưa có lớp nào' : 'Đang hiện toàn bộ học sinh'}
+            </span>
+          </div>
 
           <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -573,33 +617,48 @@ export default function Classes() {
             {filteredUnenrolled.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-8">
                 {unenrolledStudents.length === 0
-                  ? 'Tất cả học sinh đã được thêm vào lớp này'
+                  ? (onlyUnassigned ? 'Không có học sinh nào đang chưa phân lớp' : 'Tất cả học sinh đã được thêm vào lớp này')
                   : 'Không tìm thấy học sinh phù hợp'}
               </p>
             ) : (
-              filteredUnenrolled.map(s => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm hover:border-teal-400 transition-all"
-                >
-                  <div>
-                    <p className="font-bold text-sm text-gray-800">{s.full_name}</p>
-                    <p className="text-xs text-gray-400">
-                      Mã HS: <span className="font-semibold text-teal-600">{s.student_code || '—'}</span>
-                      {s.school && <> · Trường: {s.school}</>}
-                    </p>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      await enroll(s.id, selClass.id)
-                      toast.success(`Đã thêm ${s.full_name} vào lớp`)
-                    }}
-                    className="btn-teal text-xs py-1.5 px-3.5 rounded-lg shadow-sm"
+              filteredUnenrolled.map(s => {
+                const isUnassigned = !activeEnrolledStudentIds.has(s.id);
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm hover:border-teal-400 transition-all"
                   >
-                    + Thêm vào lớp
-                  </button>
-                </div>
-              ))
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-sm text-gray-800">{s.full_name}</p>
+                        {isUnassigned ? (
+                          <span className="bg-amber-100 text-amber-800 text-[10px] font-700 px-2 py-0.5 rounded-md">
+                            Chưa phân lớp
+                          </span>
+                        ) : (
+                          <span className="bg-gray-100 text-gray-600 text-[10px] font-600 px-2 py-0.5 rounded-md">
+                            Đã có lớp khác
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Mã HS: <span className="font-semibold text-teal-600">{s.student_code || '—'}</span>
+                        {s.school && <> · Trường: {s.school}</>}
+                        {s.phone && <> · SĐT: {s.phone}</>}
+                      </p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await enroll(s.id, selClass.id)
+                        toast.success(`Đã thêm ${s.full_name} vào lớp`)
+                      }}
+                      className="btn-teal text-xs py-1.5 px-3.5 rounded-lg shadow-sm"
+                    >
+                      + Thêm vào lớp
+                    </button>
+                  </div>
+                )
+              })
             )}
           </div>
 
