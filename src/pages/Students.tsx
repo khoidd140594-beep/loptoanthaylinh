@@ -666,12 +666,45 @@ export default function Students() {
     return true // 'all'
   })
 
-  const filtered = tabFiltered.filter(s =>
+  // ── Grade Filter ───────────────────────────────────────────────────────
+  const [selectedGrade, setSelectedGrade] = useState<'all' | '6' | '7' | '8' | '9'>('all')
+
+  const getStudentGradeNumber = (s: any) => {
+    if (s.grade) {
+      const match = String(s.grade).match(/\d+/)
+      if (match) return match[0]
+    }
+    // Nếu chưa có thông tin grade trong student record, tìm từ lớp đăng học
+    const studentEnrollments = enrollments.filter(e => e.student_id === s.id && e.status === 'active')
+    for (const e of studentEnrollments) {
+      const cls = classes.find(c => c.id === e.class_id)
+      const name = (cls?.name || (cls as any)?.class_name || '').toLowerCase()
+      const match = name.match(/\b(6|7|8|9)\b/) || name.match(/k(6|7|8|9)\b/) || name.match(/lớp\s*(6|7|8|9)/)
+      if (match) return match[1]
+    }
+    return null
+  }
+
+  const gradeFiltered = tabFiltered.filter(s => {
+    if (selectedGrade === 'all') return true
+    const g = getStudentGradeNumber(s)
+    return g === selectedGrade
+  })
+
+  const filtered = gradeFiltered.filter(s =>
     s.full_name.toLowerCase().includes(search.toLowerCase()) ||
     s.student_code.toLowerCase().includes(search.toLowerCase()) ||
     (s.parent_phone ?? '').includes(search) ||
     (s.school ?? '').toLowerCase().includes(search.toLowerCase())
   )
+
+  const gradeCounts = {
+    all: tabFiltered.length,
+    '6': tabFiltered.filter(s => getStudentGradeNumber(s) === '6').length,
+    '7': tabFiltered.filter(s => getStudentGradeNumber(s) === '7').length,
+    '8': tabFiltered.filter(s => getStudentGradeNumber(s) === '8').length,
+    '9': tabFiltered.filter(s => getStudentGradeNumber(s) === '9').length,
+  }
 
   // Chỉ thao tác trên những em đang hiện ra sau khi lọc và tìm kiếm.
   const visibleIds     = filtered.map(s => s.id)
@@ -728,35 +761,70 @@ export default function Students() {
         </div>
       </div>
 
-      {/* ── Search + Tabs ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        {/* Search */}
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3.5 top-3 w-4 h-4 text-teal-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm tên, mã, SĐT, trường..." className="input pl-10" />
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1.5 bg-gray-100 rounded-xl p-1 flex-wrap">
-          {TABS.map(t => (
+      {/* ── Main Layout (Sidebar Khối Lớp + Table Content) ────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+        {/* Left Sidebar: Grade Selector */}
+        <div className="md:col-span-1 space-y-2">
+          {[
+            { id: 'all', label: 'Toàn trường', count: gradeCounts.all },
+            { id: '6', label: 'Khối 6', count: gradeCounts['6'] },
+            { id: '7', label: 'Khối 7', count: gradeCounts['7'] },
+            { id: '8', label: 'Khối 8', count: gradeCounts['8'] },
+            { id: '9', label: 'Khối 9', count: gradeCounts['9'] },
+          ].map(g => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border ${
-                tab === t.key
-                  ? t.color + ' shadow-sm'
-                  : 'text-gray-400 bg-transparent border-transparent hover:bg-white hover:text-gray-600'
+              key={g.id}
+              onClick={() => setSelectedGrade(g.id as any)}
+              className={`w-full flex items-center justify-between p-3.5 rounded-2xl font-bold text-sm transition-all border ${
+                selectedGrade === g.id
+                  ? 'bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-100'
+                  : 'bg-white text-gray-700 border-gray-100 hover:border-teal-200 hover:bg-teal-50/50'
               }`}
             >
-              {t.label}
-              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${tab === t.key ? 'bg-white/60' : 'bg-gray-200'}`}>
-                {counts[t.key]}
+              <span className="flex items-center gap-2.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${selectedGrade === g.id ? 'bg-white' : 'bg-teal-500'}`} />
+                {g.label}
+              </span>
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                selectedGrade === g.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {g.count} HS
               </span>
             </button>
           ))}
         </div>
-      </div>
+
+        {/* Right Content Area */}
+        <div className="md:col-span-3 space-y-4">
+          {/* Search + Tabs */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            {/* Search */}
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="absolute left-3.5 top-3 w-4 h-4 text-teal-400" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Tìm tên, mã, SĐT, trường..." className="input pl-10" />
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1.5 bg-gray-100 rounded-xl p-1 flex-wrap">
+              {TABS.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border ${
+                    tab === t.key
+                      ? t.color + ' shadow-sm'
+                      : 'text-gray-400 bg-transparent border-transparent hover:bg-white hover:text-gray-600'
+                  }`}
+                >
+                  {t.label}
+                  <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${tab === t.key ? 'bg-white/60' : 'bg-gray-200'}`}>
+                    {counts[t.key]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
 
       {/* ── Anonymous warning ────────────────────────────────────────── */}
       {tab === 'anonymous' && counts.anonymous > 0 && (
@@ -932,6 +1000,8 @@ export default function Students() {
           </div>
         )}
       </div>
+    </div>
+  </div>
 
       {/* ── Modal thêm/sửa ──────────────────────────────────────────── */}
       <Modal open={modal === 'form'} onClose={() => setModal(null)}
