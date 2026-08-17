@@ -104,7 +104,7 @@ export default function StudentPortal() {
       setCourses(filteredCourses)
     } catch (err) {
       console.error('Lỗi tải dữ liệu học sinh:', err)
-    } font-sans finally {
+    } finally {
       setLoading(false)
     }
   }
