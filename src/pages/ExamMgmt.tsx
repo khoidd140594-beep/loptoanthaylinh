@@ -148,7 +148,7 @@ export default function ExamMgmt() {
   // ── 3. AI Sinh Đề Tương Tự (Thay số & Tạo bài toán mới bằng Gemini API) ──
   const [aiSimilarModalExam, setAiSimilarModalExam] = useState<any>(null)
   const [aiApiKey, setAiApiKey]                     = useState('')
-  const [aiModel, setAiModel]                       = useState('gemini-1.5-flash')
+  const [aiModel, setAiModel]                       = useState('gemini-2.0-flash')
   const [aiGenerating, setAiGenerating]             = useState(false)
   const [aiStatusMsg, setAiStatusMsg]               = useState('')
 
@@ -1171,10 +1171,10 @@ export default function ExamMgmt() {
             <select
               value={aiModel}
               onChange={e => setAiModel(e.target.value)}
-              className="input"
+              className="input font-semibold"
             >
-              <option value="gemini-1.5-flash">Gemini 1.5 Flash (Tốc độ cao - Khuyên dùng)</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash (Thế hệ mới)</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash (Tốc độ cực nhanh - Khuyên dùng)</option>
+              <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (Bản ổn định)</option>
               <option value="gemini-1.5-pro">Gemini 1.5 Pro (Tư duy toán học chuyên sâu)</option>
             </select>
           </div>

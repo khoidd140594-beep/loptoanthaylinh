@@ -244,7 +244,7 @@ export async function generateSimilarExamWithAI({
   examTitle,
   questions,
   apiKey,
-  model = 'gemini-1.5-flash',
+  model = 'gemini-2.0-flash',
   onProgress
 }: {
   examTitle: string;
@@ -307,28 +307,52 @@ Tạo 1 ĐỀ THI MỚI HOÀN TOÀN TƯƠNG TỰ đề thi gốc bằng cách:
 
   onProgress?.("🤖 Đang gọi Gemini API để sáng tạo bài toán mới & thay số...");
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: systemPrompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.7,
-        maxOutputTokens: 65536
-      }
-    })
-  });
+  // Thử model được chọn trước, nếu lỗi thì tự động fallback thử các model tiếp theo
+  const modelsToTry = Array.from(new Set([
+    model,
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro',
+    'gemini-2.5-flash'
+  ]));
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Lỗi AI API (HTTP ${res.status})`);
+  let rawText = '';
+  let lastErrMessage = '';
+
+  for (const m of modelsToTry) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey.trim()}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemPrompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.7,
+            maxOutputTokens: 65536
+          }
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        lastErrMessage = err?.error?.message || `HTTP ${res.status}`;
+        console.warn(`Model ${m} chưa hỗ trợ:`, lastErrMessage);
+        continue;
+      }
+
+      const jsonRes = await res.json();
+      rawText = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (rawText) break;
+    } catch (e: any) {
+      lastErrMessage = e.message || 'Lỗi kết nối';
+    }
   }
 
-  const jsonRes = await res.json();
-  const rawText = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  if (!rawText) throw new Error('Gemini không trả về dữ liệu');
+  if (!rawText) {
+    throw new Error(`Lỗi gọi Gemini API: ${lastErrMessage}`);
+  }
 
   onProgress?.("🔍 Đang tổng hợp đề thi mới...");
   const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
