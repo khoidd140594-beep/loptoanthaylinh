@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FileUp, FileText, Trash2, RefreshCw, Eye, Edit2, Save, X, Settings, Target, Paperclip } from 'lucide-react'
+import { FileUp, FileText, Trash2, RefreshCw, Eye, Edit2, Save, X, Settings, Target, Paperclip, BookOpen, Download, Wand2 } from 'lucide-react'
 import { useExamStore } from '@/store/examStore'
 import { parseWordToExam } from '@/services/mathWordParserService'
 import { parseTexToExam } from '@/services/texParserService'
@@ -405,103 +405,127 @@ export default function ExamMgmt() {
         </div>
       )}
 
-      {/* ── Bảng danh sách đề (chung cả 2 tab) ── */}
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-bold text-gray-700 text-sm">
-            Tất cả đề thi
-            {activeTab === 'tsa' && <span className="ml-2 text-orange-600 text-xs font-black">(Lọc: TSA)</span>}
-          </h2>
-          <span className="text-xs text-gray-400">{exams.length} đề</span>
+      {/* ── Giao diện 4 cột theo Khối lớp (Khối 6, Khối 7, Khối 8, Khối 9) ── */}
+      {loading && exams.length === 0 ? (
+        <div className="card py-16 text-center">
+          <RefreshCw className="w-8 h-8 animate-spin text-teal-500 mx-auto" />
+          <p className="text-gray-400 text-sm mt-2">Đang tải danh sách đề thi...</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ background: 'linear-gradient(135deg,#0d9488,#14b8a6)' }}>
-                <th className="px-4 py-3 text-left text-white font-bold text-xs">Tên đề thi</th>
-                <th className="px-4 py-3 text-left text-white font-bold text-xs">Loại</th>
-                <th className="px-4 py-3 text-left text-white font-bold text-xs">Ngày tạo</th>
-                <th className="px-4 py-3 text-right text-white font-bold text-xs">Hành động</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && exams.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-10"><RefreshCw className="w-6 h-6 animate-spin text-teal-500 mx-auto" /></td></tr>
-              ) : exams.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-12 text-gray-400">Chưa có đề thi nào trong ngân hàng</td></tr>
-              ) : (
-                exams
-                  .map((exam, i) => {
-                    const isTSA = (exam as any).exam_type === 'tsa'
-                    || exam.title?.startsWith('[TSA]')
-                  
-                  const isLatex = !isTSA && (
-                    (exam as any).exam_type === 'latex'
-                    || exam.title?.startsWith('[LaTeX]')
-                  )
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { grade: 6, label: 'Khối 6', color: 'blue', border: 'border-blue-300', headerBg: 'bg-blue-50/60', text: 'text-blue-600', badgeBg: 'bg-blue-100 text-blue-700' },
+            { grade: 7, label: 'Khối 7', color: 'emerald', border: 'border-emerald-300', headerBg: 'bg-emerald-50/60', text: 'text-emerald-600', badgeBg: 'bg-emerald-100 text-emerald-700' },
+            { grade: 8, label: 'Khối 8', color: 'orange', border: 'border-orange-300', headerBg: 'bg-orange-50/60', text: 'text-orange-600', badgeBg: 'bg-orange-100 text-orange-700' },
+            { grade: 9, label: 'Khối 9', color: 'purple', border: 'border-purple-300', headerBg: 'bg-purple-50/60', text: 'text-purple-600', badgeBg: 'bg-purple-100 text-purple-700' },
+          ].map(col => {
+            // Lọc đề thi thuộc khối tương ứng
+            const gradeExams = exams.filter(exam => {
+              const isTSA = (exam as any).exam_type === 'tsa' || exam.title?.startsWith('[TSA]')
+              if (activeTab === 'tsa' && !isTSA) return false
+              if (activeTab === 'normal' && isTSA) return false
 
-                    if (activeTab === 'tsa' && !isTSA) return null
-                    if (activeTab === 'normal' && isTSA) return null
-                    return (
-                      <tr key={exam.id} className={`border-b border-teal-50 hover:bg-teal-50/40 ${i % 2 === 0 ? '' : 'bg-teal-50/20'}`}>
-                        <td className="px-4 py-3 font-bold text-teal-800">{exam.title}</td>
-                        <td className="px-4 py-3">
-                          {isTSA ? (
-                            <span className="bg-orange-100 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-orange-200">TSA</span>
-                          ) : isLatex ? (
-                            <span className="bg-teal-100 text-teal-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-teal-200">LaTeX</span>
-                          ) : (
-                            <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-blue-200">Word</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-gray-500">{fmt(new Date(exam.created_at), 'dd/MM/yyyy HH:mm')}</td>
-                        <td className="px-4 py-3 text-right flex justify-end gap-2">
-                          {/* Cấu hình điểm: chỉ đề thường */}
-                          {!isTSA && (
+              const title = (exam.title || '').toLowerCase()
+              const examGrade = (exam as any).grade || (exam.data as any)?.grade
+              
+              // Nếu có thuộc tính grade rõ ràng
+              if (examGrade) return Number(examGrade) === col.grade
+
+              // Phân tích từ tiêu đề
+              if (title.includes(`k${col.grade}`) || title.includes(`khối ${col.grade}`) || title.includes(`lớp ${col.grade}`) || title.startsWith(`${col.grade}.`)) {
+                return true
+              }
+
+              // Nếu đề số tự do (ví dụ 6.15.8 -> Khối 6, 8.05.1 -> Khối 8)
+              if (title.startsWith(`${col.grade}`)) return true
+
+              // Mặc định phân bổ đều nếu không chứa số khối khác
+              if (col.grade === 6 && !title.includes('7') && !title.includes('8') && !title.includes('9')) return true
+              if (col.grade === 8 && (title.includes('8') || title.includes('buổi'))) return true
+              return false
+            })
+
+            return (
+              <div key={col.grade} className={`card border-t-4 ${col.border} min-h-[480px] flex flex-col p-4 bg-white shadow-sm hover:shadow-md transition-shadow`}>
+                {/* Column Header */}
+                <div className={`flex items-center justify-between p-2.5 rounded-xl ${col.headerBg} mb-3`}>
+                  <span className={`font-black text-sm ${col.text}`}>{col.label}</span>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${col.badgeBg}`}>
+                    {gradeExams.length} đề
+                  </span>
+                </div>
+
+                {/* Exams List */}
+                <div className="flex-1 space-y-3 overflow-y-auto max-h-[600px] pr-1">
+                  {gradeExams.length === 0 ? (
+                    <div className="h-40 flex items-center justify-center text-xs text-gray-400 italic">
+                      Chưa có đề thi
+                    </div>
+                  ) : (
+                    gradeExams.map(exam => {
+                      const isTSA = (exam as any).exam_type === 'tsa' || exam.title?.startsWith('[TSA]')
+                      return (
+                        <div
+                          key={exam.id}
+                          className="p-3 border border-gray-100 rounded-xl hover:border-teal-200 hover:shadow-sm bg-white transition-all space-y-2 group"
+                        >
+                          <div className="font-bold text-gray-800 text-xs leading-snug line-clamp-2 group-hover:text-teal-700">
+                            {exam.title}
+                          </div>
+                          <div className="text-[10px] text-gray-400">
+                            {fmt(new Date(exam.created_at), 'dd/MM/yyyy HH:mm')}
+                          </div>
+
+                          {/* Action Icon Row */}
+                          <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-gray-50 text-gray-400">
+                            {!isTSA && (
+                              <button
+                                onClick={() => handleOpenConfig(exam.id, exam.title)}
+                                className="p-1 hover:text-orange-500 hover:bg-orange-50 rounded transition"
+                                title="Cấu hình điểm"
+                              >
+                                <Settings className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {!isTSA ? (
+                              <button
+                                onClick={() => handlePreview(exam.id, exam.title)}
+                                disabled={previewing === exam.id}
+                                className="p-1 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                                title="Xem trước & Chỉnh sửa"
+                              >
+                                {previewing === exam.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handlePreviewTSA(exam.id, exam.title)}
+                                disabled={tsaPreviewing === exam.id}
+                                className="p-1 hover:text-orange-600 hover:bg-orange-50 rounded transition"
+                                title="Xem trước & Chỉnh sửa đề TSA"
+                              >
+                                {tsaPreviewing === exam.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
+
                             <button
-                              onClick={() => handleOpenConfig(exam.id, exam.title)}
-                              className="p-1.5 text-orange-500 hover:bg-orange-100 rounded-lg transition-colors"
-                              title="Cấu hình điểm"
+                              onClick={() => handleDelete(exam.id, exam.title)}
+                              className="p-1 hover:text-red-600 hover:bg-red-50 rounded transition"
+                              title="Xóa đề thi"
                             >
-                              <Settings className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                          {/* Xem trước: đề thường dùng modal cũ, đề TSA dùng TSAPreviewModal */}
-                          {!isTSA ? (
-                            <button
-                              onClick={() => handlePreview(exam.id, exam.title)}
-                              disabled={previewing === exam.id}
-                              className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors"
-                              title="Xem trước & Chỉnh sửa"
-                            >
-                              {previewing === exam.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handlePreviewTSA(exam.id, exam.title)}
-                              disabled={tsaPreviewing === exam.id}
-                              className="p-1.5 text-orange-500 hover:bg-orange-100 rounded-lg transition-colors"
-                              title="Xem trước & Chỉnh sửa đề TSA"
-                            >
-                              {tsaPreviewing === exam.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDelete(exam.id, exam.title)}
-                            className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition-colors"
-                            title="Xóa đề thi"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })
-              )}
-            </tbody>
-          </table>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
+      )}
 
       {/* ── Modal cấu hình điểm ── */}
       <Modal open={!!configExam} onClose={() => setConfigExam(null)} title="" size="3xl">
