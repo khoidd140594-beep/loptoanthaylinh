@@ -261,6 +261,8 @@ export default function StudentPortal() {
   // Danh sách các buổi học (Tự động quét số buổi từ các phòng thi, VD: Buổi 14, Buổi 5...)
   const sessionList = useMemo(() => {
     const foundSessionNums = new Set<number>()
+    const matchedRoomIds = new Set<string>()
+
     examRooms.forEach(r => {
       const roomTitle = r.exams?.title || r.name || r.code || ''
       const match = roomTitle.match(/buổi\s*(\d+)/i)
@@ -282,6 +284,9 @@ export default function StudentPortal() {
         const title = (r.exams?.title || r.name || r.code || '').toLowerCase()
         return title.includes(`buổi ${sessionNum}`) && (title.includes('đề 2') || title.includes('đề 02'))
       })
+
+      if (de1Room) matchedRoomIds.add(de1Room.id)
+      if (de2Room) matchedRoomIds.add(de2Room.id)
 
       const de1Sub = submissions.find(s => de1Room && s.room_id === de1Room.id)
       const de2Sub = submissions.find(s => de2Room && s.room_id === de2Room.id)
@@ -307,6 +312,26 @@ export default function StudentPortal() {
         ]
       }
     })
+
+    // Gom các phòng thi còn lại (không đặt tên Buổi X) vào mục Đề thi giao trực tiếp
+    const otherRooms = examRooms.filter(r => !matchedRoomIds.has(r.id))
+    if (otherRooms.length > 0) {
+      sessions.unshift({
+        sessionNum: 999,
+        name: 'Bài thi giao trực tiếp',
+        exams: otherRooms.map(r => {
+          const sub = submissions.find(s => s.room_id === r.id)
+          return {
+            codeName: r.exams?.title || r.name || `Mã: ${r.code}`,
+            room: r,
+            submission: sub,
+            score: sub ? (sub.score ?? sub.total_score ?? '—') : '—',
+            status: sub ? 'Đã hoàn thành' : r.status === 'closed' ? 'Đã đóng' : 'Có thể vào thi'
+          }
+        })
+      })
+    }
+
     return sessions
   }, [examRooms, submissions])
 
@@ -491,37 +516,96 @@ export default function StudentPortal() {
           </div>
         </div>
 
-        {/* Quick Join Room by Code Card */}
-        <div className="bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-600 rounded-3xl p-5 sm:p-6 text-white shadow-lg space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Direct Exam Entry Card (Vào thi trực tiếp không cần mã phòng) */}
+        <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-700 rounded-3xl p-5 sm:p-6 text-white shadow-xl space-y-4 border border-teal-500/30">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-teal-600/50">
             <div>
-              <h2 className="text-lg sm:text-xl font-black flex items-center gap-2">
-                <Key className="w-5 h-5 text-teal-200" /> VÀO PHÒNG THI BẰNG MÃ PHÒNG
+              <div className="inline-flex items-center gap-1.5 bg-amber-400 text-gray-900 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+                <Sparkles className="w-3.5 h-3.5" /> THI TRỰC TIẾP KHÔNG CẦN MÃ PHÒNG
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2 text-white drop-shadow">
+                <Play className="w-6 h-6 text-amber-300 fill-current" /> VÀO LÀM BÀI THI NGAY
               </h2>
               <p className="text-xs text-teal-100 mt-1">
-                Nhập mã phòng thi 5 ký tự (ví dụ: <strong className="font-mono text-yellow-300">80RQF</strong>) do thầy cô cung cấp để vào thi ngay.
+                Bấm nút <strong className="text-amber-300 font-extrabold">"Vào làm bài"</strong> ở các phòng thi bên dưới để tham gia thi ngay lập tức mà không cần gõ mã phòng.
               </p>
             </div>
 
-            <form onSubmit={handleJoinByCode} className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Form nhập mã phòng dự phòng */}
+            <form onSubmit={handleJoinByCode} className="flex items-center gap-2 bg-teal-900/50 p-2 rounded-2xl border border-teal-500/40">
               <input
                 type="text"
                 value={inputRoomCode}
                 onChange={e => setInputRoomCode(e.target.value.toUpperCase())}
                 placeholder="Mã phòng (VD: 80RQF)"
                 maxLength={10}
-                className="px-4 py-3 bg-white/10 backdrop-blur-md border-2 border-white/20 rounded-2xl text-white font-mono font-bold text-center uppercase tracking-wider placeholder:text-teal-200/70 focus:bg-white focus:text-gray-900 focus:outline-none transition-all w-full sm:w-48 text-sm"
+                className="px-3 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white font-mono font-bold text-center uppercase tracking-wider placeholder:text-teal-200/60 focus:bg-white focus:text-gray-900 focus:outline-none transition-all w-36 text-xs"
               />
               <button
                 type="submit"
                 disabled={isJoiningRoom}
-                className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-extrabold px-5 py-3 rounded-2xl text-sm whitespace-nowrap shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-extrabold px-3 py-2 rounded-xl text-xs whitespace-nowrap shadow transition-all active:scale-95 disabled:opacity-50 inline-flex items-center gap-1"
               >
-                <Play className="w-4 h-4 fill-current" />
-                {isJoiningRoom ? 'Đang tìm...' : 'Vào làm bài'}
+                <Key className="w-3.5 h-3.5" />
+                {isJoiningRoom ? 'Đang tìm...' : 'Vào theo mã'}
               </button>
             </form>
           </div>
+
+          {/* Quick Access Active Rooms List */}
+          {examRooms.filter(r => r.status !== 'closed').length > 0 ? (
+            <div className="space-y-2.5 pt-1">
+              <p className="text-xs font-extrabold text-amber-200 uppercase tracking-wider flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-amber-300" /> Các phòng thi đang mở (Click thi trực tiếp ngay):
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {examRooms.filter(r => r.status !== 'closed').map(room => {
+                  const sub = submissions.find(s => s.room_id === room.id)
+                  const roomTitle = room.exams?.title || room.name || `Phòng thi ${room.code}`
+
+                  return (
+                    <div
+                      key={room.id}
+                      className="bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md rounded-2xl p-3.5 flex flex-col justify-between gap-3 transition-all group shadow-sm"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-black text-white text-sm leading-snug group-hover:text-amber-200 transition-colors">
+                            {roomTitle}
+                          </h4>
+                          <span className="bg-amber-400/20 text-amber-200 font-mono text-[10px] font-bold px-2 py-0.5 rounded border border-amber-300/30 shrink-0">
+                            {room.code}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-teal-100 mt-1 font-medium">
+                          {room.exams?.duration && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-300" /> {room.exams.duration} phút
+                            </span>
+                          )}
+                          {room.classes?.class_name && (
+                            <span className="opacity-80">Lớp: {room.classes.class_name}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => navigate(`/exam-room/${room.id}`)}
+                        className="w-full bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-gray-950 font-black text-xs py-2.5 px-3 rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        {sub ? 'Xem lại bài thi' : 'VÀO LÀM BÀI NGAY (TRỰC TIẾP)'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-teal-900/30 border border-teal-500/30 rounded-2xl p-4 text-center text-xs text-teal-100 font-medium">
+              Hiện tại không có phòng thi nào mở trực tiếp. Thầy cô sẽ mở phòng thi khi tới giờ làm bài!
+            </div>
+          )}
         </div>
 
         {/* Assigned Exam Rooms Card Section */}
@@ -657,10 +741,10 @@ export default function StudentPortal() {
                   {sessionList.map(session => (
                     session.exams.map((examItem, idx) => (
                       <tr key={`${session.name}-${examItem.codeName}`} className="hover:bg-teal-50/30 transition-colors">
-                        {/* Buổi học column with rowSpan = 2 */}
+                        {/* Buổi học column với rowSpan động */}
                         {idx === 0 && (
                           <td
-                            rowSpan={2}
+                            rowSpan={session.exams.length}
                             className="px-5 py-4 font-extrabold text-gray-800 text-sm bg-gray-50/50 border-r border-gray-100 border-b border-gray-200"
                           >
                             {session.name}
