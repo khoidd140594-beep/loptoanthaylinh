@@ -214,33 +214,49 @@ export default function StudentPortal() {
 
   // Danh sách các buổi học & Đề thi tương ứng
   const sessionList = useMemo(() => {
-    const foundSessionNums = new Set<number>()
     const matchedRoomIds = new Set<string>()
+    const sessionMap = new Map<number, { de1Room?: any; de2Room?: any }>()
 
+    // 1. Phân tích từng phòng thi xem thuộc Buổi mấy, Đề mấy
     examRooms.forEach(r => {
-      const roomTitle = r.exams?.title || r.name || r.code || ''
-      const match = roomTitle.match(/buổi\s*(\d+)/i)
-      if (match) {
-        foundSessionNums.add(parseInt(match[1], 10))
+      const roomTitle = (r.exams?.title || r.name || r.code || '').toLowerCase()
+      // Tìm số buổi trong tên (VD: buổi 14, buổi 05, b14...)
+      const sessionMatch = roomTitle.match(/buổi\s*(\d+)/i) || roomTitle.match(/\bb(\d+)\b/i)
+      const sessionNum = sessionMatch ? parseInt(sessionMatch[1], 10) : null
+
+      if (sessionNum !== null) {
+        if (!sessionMap.has(sessionNum)) {
+          sessionMap.set(sessionNum, {})
+        }
+        const sObj = sessionMap.get(sessionNum)!
+
+        if (roomTitle.includes('đề 1') || roomTitle.includes('đề 01') || roomTitle.includes('đề1')) {
+          sObj.de1Room = r
+          matchedRoomIds.add(r.id)
+        } else if (roomTitle.includes('đề 2') || roomTitle.includes('đề 02') || roomTitle.includes('đề2')) {
+          sObj.de2Room = r
+          matchedRoomIds.add(r.id)
+        } else {
+          // Nếu không phân biệt đề 1/đề 2, gán vào đề 1 nếu trống
+          if (!sObj.de1Room) {
+            sObj.de1Room = r
+            matchedRoomIds.add(r.id)
+          } else if (!sObj.de2Room) {
+            sObj.de2Room = r
+            matchedRoomIds.add(r.id)
+          }
+        }
       }
     })
 
-    const sessionNums = Array.from(
-      new Set([...Array.from(foundSessionNums), 5, 4, 3, 2, 1])
+    const allSessionNums = Array.from(
+      new Set([...Array.from(sessionMap.keys()), 5, 4, 3, 2, 1])
     ).sort((a, b) => b - a)
 
-    const sessions = sessionNums.map(sessionNum => {
-      const de1Room = examRooms.find(r => {
-        const title = (r.exams?.title || r.name || r.code || '').toLowerCase()
-        return title.includes(`buổi ${sessionNum}`) && (title.includes('đề 1') || title.includes('đề 01'))
-      })
-      const de2Room = examRooms.find(r => {
-        const title = (r.exams?.title || r.name || r.code || '').toLowerCase()
-        return title.includes(`buổi ${sessionNum}`) && (title.includes('đề 2') || title.includes('đề 02'))
-      })
-
-      if (de1Room) matchedRoomIds.add(de1Room.id)
-      if (de2Room) matchedRoomIds.add(de2Room.id)
+    const sessions = allSessionNums.map(sessionNum => {
+      const sObj = sessionMap.get(sessionNum) || {}
+      const de1Room = sObj.de1Room
+      const de2Room = sObj.de2Room
 
       const de1Sub = submissions.find(s => de1Room && s.room_id === de1Room.id)
       const de2Sub = submissions.find(s => de2Room && s.room_id === de2Room.id)
@@ -253,7 +269,7 @@ export default function StudentPortal() {
             codeName: 'Đề 2',
             room: de2Room,
             submission: de2Sub,
-            score: de2Sub ? (de2Sub.score ?? de2Sub.total_score ?? '—') : '—',
+            score: de2Sub ? (de2Sub.score ?? de2Sub.total_score ?? '—') : (de2Room ? 'Chưa thi' : '—'),
             statusText: de2Sub ? `${de2Sub.score ?? de2Sub.total_score}đ` : de2Room ? 'Chưa thi' : '—'
           },
           {
@@ -267,20 +283,20 @@ export default function StudentPortal() {
       }
     })
 
-    // Gom các phòng thi còn lại (không đặt tên Buổi X)
+    // Gom các phòng thi còn lại (không ghi số buổi rõ ràng)
     const otherRooms = examRooms.filter(r => !matchedRoomIds.has(r.id))
     if (otherRooms.length > 0) {
       sessions.unshift({
         sessionNum: 999,
-        name: 'Đề thi khác',
+        name: 'Bài thi giao trực tiếp',
         exams: otherRooms.map(r => {
           const sub = submissions.find(s => s.room_id === r.id)
           return {
             codeName: r.exams?.title || r.name || `Phòng ${r.code}`,
             room: r,
             submission: sub,
-            score: sub ? (sub.score ?? sub.total_score ?? '—') : (r.status === 'closed' ? '—' : 'Chưa thi'),
-            statusText: sub ? 'Đã hoàn thành' : r.status === 'closed' ? 'Đã đóng' : 'Chưa thi'
+            score: sub ? (sub.score ?? sub.total_score ?? '—') : 'Chưa thi',
+            statusText: sub ? 'Đã hoàn thành' : 'Chưa thi'
           }
         })
       })
