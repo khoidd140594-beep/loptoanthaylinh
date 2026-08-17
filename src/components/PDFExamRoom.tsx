@@ -356,20 +356,6 @@ const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
     if (isSubmitting || isSubmitted) return;
 
     let currentSubId = submissionId || existingSubmissionId;
-    if (!currentSubId) {
-      try {
-        await ensureSignedIn();
-        currentSubId = await createSubmission({ roomId: room.id, roomCode: room.code, examId: exam.id, student });
-        if (currentSubId) setSubmissionId(currentSubId);
-      } catch (err) {
-        console.error('Lỗi tạo phiên thi PDF khi nộp bài:', err);
-      }
-    }
-
-    if (!currentSubId) {
-      alert('Không thể kết nối đến máy chủ bài thi. Vui lòng kiểm tra lại mạng và thử lại!');
-      return;
-    }
 
     setIsSubmitting(true);
     setShowConfirm(false);
@@ -378,13 +364,19 @@ const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
     try {
       const merged = mergeAnswers(mcAnswers, tfAnswers, saAnswers, writingAnswers);
       const submission = await submitExam(
-        currentSubId, merged, exam,
+        currentSubId,
+        merged,
+        exam,
         { 
           tabSwitchCount, 
           tabSwitchWarnings: tabWarnings, 
           autoSubmitted: auto,
           duration: (limit * 60) - timeLeft
         },
+        {
+          roomId: room.id,
+          student
+        }
       );
       
       if (submission) {

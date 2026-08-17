@@ -131,20 +131,6 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ room, exam, student, existingSubmis
     if (!exam || isSubmittingRef.current) return;
 
     let currentSubId = submissionId || existingSubmissionId;
-    if (!currentSubId) {
-      try {
-        await ensureSignedIn();
-        currentSubId = await createSubmission({ roomId: room.id, roomCode: room.code, examId: exam.id, student });
-        if (currentSubId) setSubmissionId(currentSubId);
-      } catch (err) {
-        console.error('Lỗi khởi tạo submission khi nộp bài:', err);
-      }
-    }
-
-    if (!currentSubId) {
-      alert('Không thể kết nối đến máy chủ bài thi. Vui lòng kiểm tra lại mạng và thử lại!');
-      return;
-    }
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
@@ -164,12 +150,21 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ room, exam, student, existingSubmis
 
     try {
       const submission = await Promise.race([
-        submitExam(currentSubId, userAnswers, exam, {
-          tabSwitchCount,
-          tabSwitchWarnings: safeWarnings as any,
-          autoSubmitted: auto,
-          duration: (limit * 60) - timeLeft
-        }),
+        submitExam(
+          currentSubId,
+          userAnswers,
+          exam,
+          {
+            tabSwitchCount,
+            tabSwitchWarnings: safeWarnings as any,
+            autoSubmitted: auto,
+            duration: (limit * 60) - timeLeft
+          },
+          {
+            roomId: room.id,
+            student
+          }
+        ),
         timeoutPromise
       ]);
 
