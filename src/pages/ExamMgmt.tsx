@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FileUp, FileText, Trash2, RefreshCw, Eye, Edit2, Save, X, Settings, Target, Paperclip } from 'lucide-react'
+import { FileUp, FileText, Trash2, RefreshCw, Eye, Edit2, Save, X, Settings, Target, Paperclip, AlertCircle, Copy } from 'lucide-react'
 import { useExamStore } from '@/store/examStore'
 import { parseWordToExam } from '@/services/mathWordParserService'
 import { parseTexToExam } from '@/services/texParserService'
@@ -15,8 +15,66 @@ import TSAPreviewModal from '@/components/TSAPreviewModal'
 import ImageAttachModal, { AttachedImage } from '@/components/ImageAttachModal'
 import toast from 'react-hot-toast'
 
+const INIT_EXAMS_SQL = `-- 1. Tạo các bảng lưu trữ đề thi và phòng thi
+create extension if not exists "uuid-ossp";
+
+create table if not exists public.exams (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  data jsonb not null default '{}'::jsonb,
+  created_by uuid,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.exam_images (
+  id uuid default uuid_generate_v4() primary key,
+  exam_id uuid references public.exams(id) on delete cascade,
+  question_number integer,
+  image_index integer,
+  image_id text,
+  filename text,
+  content_type text,
+  base64 text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.exam_rooms (
+  id uuid default uuid_generate_v4() primary key,
+  code text unique not null,
+  exam_id uuid references public.exams(id) on delete cascade,
+  class_id uuid references public.classes(id) on delete set null,
+  opens_at timestamptz,
+  closes_at timestamptz,
+  duration integer,
+  status text default 'active',
+  settings jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.exam_submissions (
+  id uuid default uuid_generate_v4() primary key,
+  room_id uuid references public.exam_rooms(id) on delete cascade,
+  student_id uuid references public.students(id) on delete set null,
+  student_name text,
+  answers jsonb default '{}'::jsonb,
+  score numeric,
+  total_score numeric,
+  details jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+alter table public.exams enable row level security;
+alter table public.exam_images enable row level security;
+alter table public.exam_rooms enable row level security;
+alter table public.exam_submissions enable row level security;
+
+create policy "allow_all_exams" on public.exams for all using (true) with check (true);
+create policy "allow_all_exam_images" on public.exam_images for all using (true) with check (true);
+create policy "allow_all_exam_rooms" on public.exam_rooms for all using (true) with check (true);
+create policy "allow_all_exam_subs" on public.exam_submissions for all using (true) with check (true);`
+
 export default function ExamMgmt() {
-  const { exams, loading, loadExams, createExam, deleteExam } = useExamStore()
+  const { exams, loading, dbError, loadExams, createExam, deleteExam } = useExamStore()
   const [uploading, setUploading] = useState(false)
 
   // ── Tab: normal | tsa ──
@@ -266,6 +324,36 @@ export default function ExamMgmt() {
           </div>
         )}
       </div>
+
+      {/* ── SQL Error / Table Missing Alert Banner ── */}
+      {dbError && (
+        <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 shadow-sm text-red-900 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-extrabold text-base text-red-800">
+                Chưa khởi tạo bảng lưu trữ đề thi (public.exams) trên Supabase
+              </h3>
+              <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                Hệ thống Supabase hiện tại chưa có bảng <code className="bg-red-100 px-1 py-0.5 rounded font-mono font-bold">public.exams</code>. Vui lòng mở <strong>Supabase Dashboard -&gt; SQL Editor</strong>, dán đoạn mã SQL dưới đây và bấm <strong>Run</strong> để kích hoạt tính năng Ngân hàng đề thi &amp; Tải file LaTeX:
+              </p>
+            </div>
+          </div>
+
+          <div className="relative bg-gray-900 text-gray-100 rounded-xl p-4 text-xs font-mono overflow-x-auto max-h-52 border border-gray-800">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(INIT_EXAMS_SQL)
+                toast.success('Đã sao chép đoạn mã SQL vào bộ nhớ tạm!')
+              }}
+              className="absolute top-3 right-3 bg-teal-600 hover:bg-teal-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors shadow flex items-center gap-1.5"
+            >
+              <Copy className="w-3.5 h-3.5" /> Sao chép mã SQL
+            </button>
+            <pre className="pr-32">{INIT_EXAMS_SQL}</pre>
+          </div>
+        </div>
+      )}
 
       {/* ── Tab switcher ── */}
       <div className="flex border-b-2 border-gray-200 gap-1">

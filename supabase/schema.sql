@@ -138,54 +138,142 @@ create table if not exists email_logs (
   created_at      timestamptz default now()
 );
 
+-- ── Exams (Ngân hàng đề thi LaTeX/Word/PDF) ───────────────────
+create table if not exists public.exams (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  data jsonb not null default '{}'::jsonb,
+  created_by uuid,
+  created_at timestamptz default now()
+);
+
+-- ── Exam Images (Ảnh bóc tách từ TikZ/LaTeX) ─────────────────
+create table if not exists public.exam_images (
+  id uuid default uuid_generate_v4() primary key,
+  exam_id uuid references public.exams(id) on delete cascade,
+  question_number integer,
+  image_index integer,
+  image_id text,
+  filename text,
+  content_type text,
+  base64 text,
+  created_at timestamptz default now()
+);
+
+-- ── Exam Rooms (Phòng thi trực tuyến) ───────────────────────
+create table if not exists public.exam_rooms (
+  id uuid default uuid_generate_v4() primary key,
+  code text unique not null,
+  exam_id uuid references public.exams(id) on delete cascade,
+  class_id uuid references public.classes(id) on delete set null,
+  opens_at timestamptz,
+  closes_at timestamptz,
+  duration integer,
+  status text default 'active',
+  settings jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+-- ── Exam Submissions (Kết quả nộp bài thi) ───────────────────
+create table if not exists public.exam_submissions (
+  id uuid default uuid_generate_v4() primary key,
+  room_id uuid references public.exam_rooms(id) on delete cascade,
+  student_id uuid references public.students(id) on delete set null,
+  student_name text,
+  answers jsonb default '{}'::jsonb,
+  score numeric,
+  total_score numeric,
+  details jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+-- ── Question Banks (Ngân hàng câu hỏi) ─────────────────────
+create table if not exists public.question_banks (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  grade text,
+  subject text default 'Toán',
+  questions jsonb default '[]'::jsonb,
+  created_by uuid,
+  created_at timestamptz default now()
+);
+
+-- ── Courses, Chapters, Lessons (Khóa học & Bài giảng) ────────
+create table if not exists public.courses (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  description text,
+  is_published boolean default false,
+  assigned_class_ids text[] default '{}',
+  created_at timestamptz default now()
+);
+
+create table if not exists public.chapters (
+  id uuid default uuid_generate_v4() primary key,
+  course_id uuid references public.courses(id) on delete cascade,
+  title text not null,
+  order_index integer default 0,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.lessons (
+  id uuid default uuid_generate_v4() primary key,
+  chapter_id uuid references public.chapters(id) on delete cascade,
+  title text not null,
+  content text,
+  video_url text,
+  exam_id uuid references public.exams(id) on delete set null,
+  order_index integer default 0,
+  created_at timestamptz default now()
+);
+
+-- ── Presentations (Bài giảng trình chiếu HTML) ───────────────
+create table if not exists public.presentations (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  source_type text default 'latex',
+  lesson_id uuid references public.lessons(id) on delete set null,
+  storage_path text not null,
+  slide_count integer default 0,
+  model text,
+  created_by uuid,
+  created_at timestamptz default now()
+);
+
 -- ── Row Level Security ──────────────────────────────────────
-alter table profiles   enable row level security;
-alter table students   enable row level security;
-alter table classes    enable row level security;
-alter table enrollments enable row level security;
-alter table attendance enable row level security;
-alter table payments   enable row level security;
-alter table email_logs enable row level security;
-alter table teacher_classes enable row level security;
+alter table profiles         enable row level security;
+alter table students         enable row level security;
+alter table classes          enable row level security;
+alter table enrollments       enable row level security;
+alter table attendance       enable row level security;
+alter table payments         enable row level security;
+alter table email_logs       enable row level security;
+alter table teacher_classes  enable row level security;
+alter table exams            enable row level security;
+alter table exam_images      enable row level security;
+alter table exam_rooms       enable row level security;
+alter table exam_submissions enable row level security;
+alter table question_banks   enable row level security;
+alter table courses          enable row level security;
+alter table chapters         enable row level security;
+alter table lessons          enable row level security;
+alter table presentations    enable row level security;
 
--- All authenticated users can read
-drop policy if exists "auth read profiles" on profiles;
-drop policy if exists "auth read students" on students;
-drop policy if exists "auth read classes" on classes;
-drop policy if exists "auth read enrollments" on enrollments;
-drop policy if exists "auth read attendance" on attendance;
-drop policy if exists "auth read payments" on payments;
-drop policy if exists "auth read email_logs" on email_logs;
-drop policy if exists "auth read tc" on teacher_classes;
-
-create policy "auth read profiles"   on profiles   for select using (auth.role() = 'authenticated');
-create policy "auth read students"   on students   for select using (auth.role() = 'authenticated');
-create policy "auth read classes"    on classes    for select using (auth.role() = 'authenticated');
-create policy "auth read enrollments" on enrollments for select using (auth.role() = 'authenticated');
-create policy "auth read attendance" on attendance  for select using (auth.role() = 'authenticated');
-create policy "auth read payments"   on payments    for select using (auth.role() = 'authenticated');
-create policy "auth read email_logs" on email_logs  for select using (auth.role() = 'authenticated');
-create policy "auth read tc"         on teacher_classes for select using (auth.role() = 'authenticated');
-
--- All authenticated users can write (role-based access enforced in app layer)
-drop policy if exists "auth write students" on students;
-drop policy if exists "auth write classes" on classes;
-drop policy if exists "auth write enrollments" on enrollments;
-drop policy if exists "auth write attendance" on attendance;
-drop policy if exists "auth write payments" on payments;
-drop policy if exists "auth write email_logs" on email_logs;
-drop policy if exists "auth write tc" on teacher_classes;
-drop policy if exists "auth write profiles" on profiles;
-
-create policy "auth write students"  on students   for all using (auth.role() = 'authenticated');
-create policy "auth write classes"   on classes    for all using (auth.role() = 'authenticated');
-create policy "auth write enrollments" on enrollments for all using (auth.role() = 'authenticated');
-create policy "auth write attendance" on attendance for all using (auth.role() = 'authenticated');
-create policy "auth write payments"  on payments   for all using (auth.role() = 'authenticated');
-create policy "auth write email_logs" on email_logs for all using (auth.role() = 'authenticated');
-create policy "auth write tc"        on teacher_classes for all using (auth.role() = 'authenticated');
-create policy "auth write profiles"  on profiles   for update using (auth.uid() = id);
-
--- ── Sample data ─────────────────────────────────────────────
--- Thêm admin thủ công sau khi tạo tài khoản:
--- UPDATE profiles SET role = 'ADMIN' WHERE email = 'admin@example.com';
+-- Policies for public / authenticated access
+create policy "allow_all_profiles"       on profiles       for all using (true) with check (true);
+create policy "allow_all_students"       on students       for all using (true) with check (true);
+create policy "allow_all_classes"        on classes        for all using (true) with check (true);
+create policy "allow_all_enrollments"    on enrollments    for all using (true) with check (true);
+create policy "allow_all_attendance"     on attendance     for all using (true) with check (true);
+create policy "allow_all_payments"       on payments       for all using (true) with check (true);
+create policy "allow_all_email_logs"     on email_logs     for all using (true) with check (true);
+create policy "allow_all_teacher_cls"    on teacher_classes for all using (true) with check (true);
+create policy "allow_all_exams"          on exams          for all using (true) with check (true);
+create policy "allow_all_exam_images"    on exam_images    for all using (true) with check (true);
+create policy "allow_all_exam_rooms"     on exam_rooms     for all using (true) with check (true);
+create policy "allow_all_exam_subs"      on exam_submissions for all using (true) with check (true);
+create policy "allow_all_qbanks"         on question_banks for all using (true) with check (true);
+create policy "allow_all_courses"        on courses        for all using (true) with check (true);
+create policy "allow_all_chapters"       on chapters       for all using (true) with check (true);
+create policy "allow_all_lessons"        on lessons        for all using (true) with check (true);
+create policy "allow_all_presentations"  on presentations  for all using (true) with check (true);
