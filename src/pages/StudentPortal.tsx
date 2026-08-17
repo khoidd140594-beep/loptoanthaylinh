@@ -92,7 +92,7 @@ export default function StudentPortal() {
         const classIds = Array.from(new Set(finalRooms.map(r => r.class_id).filter(Boolean)))
 
         const [exRes, clsRes] = await Promise.all([
-          examIds.length > 0 ? supabase.from('exams').select('id, title, duration').in('id', examIds) : { data: [] },
+          examIds.length > 0 ? supabase.from('exams').select('id, title, data').in('id', examIds) : { data: [] },
           classIds.length > 0 ? supabase.from('classes').select('id, class_name').in('id', classIds) : { data: [] }
         ])
 
@@ -101,12 +101,12 @@ export default function StudentPortal() {
 
         finalRooms = finalRooms.map(r => {
           const exObj = exMap.get(r.exam_id)
-          const roomTitle = r.name || r.title || exObj?.title || (r.exams && r.exams.title) || `Bài thi mã ${r.code}`
+          const roomTitle = exObj?.title || exObj?.data?.title || (r.exams && r.exams.title) || r.name || r.title || `Bài thi mã ${r.code}`
           return {
             ...r,
             exams: {
               title: roomTitle,
-              duration: r.duration || exObj?.duration || 45
+              duration: r.duration || exObj?.data?.timeLimit || 45
             },
             classes: clsMap.get(r.class_id) || r.classes || { class_name: 'Lớp học' }
           }
