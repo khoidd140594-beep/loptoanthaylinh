@@ -220,8 +220,8 @@ export default function StudentPortal() {
     // 1. Phân tích từng phòng thi xem thuộc Buổi mấy, Đề mấy
     examRooms.forEach(r => {
       const roomTitle = (r.exams?.title || r.name || r.code || '').toLowerCase()
-      // Tìm số buổi trong tên (VD: buổi 14, buổi 05, b14...)
-      const sessionMatch = roomTitle.match(/buổi\s*(\d+)/i) || roomTitle.match(/\bb(\d+)\b/i)
+      // Tìm số buổi trong tên (VD: buổi 1, buổi 01, buổi 14, b1...)
+      const sessionMatch = roomTitle.match(/buổi\s*(\d+)/i) || roomTitle.match(/\bb(\d+)\b/i) || roomTitle.match(/b\s*(\d+)/i)
       const sessionNum = sessionMatch ? parseInt(sessionMatch[1], 10) : null
 
       if (sessionNum !== null) {
@@ -230,14 +230,13 @@ export default function StudentPortal() {
         }
         const sObj = sessionMap.get(sessionNum)!
 
-        if (roomTitle.includes('đề 1') || roomTitle.includes('đề 01') || roomTitle.includes('đề1')) {
+        if (roomTitle.includes('đề 1') || roomTitle.includes('đề 01') || roomTitle.includes('đề1') || roomTitle.includes('đề - 01') || roomTitle.includes('đề - 1')) {
           sObj.de1Room = r
           matchedRoomIds.add(r.id)
-        } else if (roomTitle.includes('đề 2') || roomTitle.includes('đề 02') || roomTitle.includes('đề2')) {
+        } else if (roomTitle.includes('đề 2') || roomTitle.includes('đề 02') || roomTitle.includes('đề2') || roomTitle.includes('đề - 02') || roomTitle.includes('đề - 2')) {
           sObj.de2Room = r
           matchedRoomIds.add(r.id)
         } else {
-          // Nếu không phân biệt đề 1/đề 2, gán vào đề 1 nếu trống
           if (!sObj.de1Room) {
             sObj.de1Room = r
             matchedRoomIds.add(r.id)
