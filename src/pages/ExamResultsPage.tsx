@@ -15,11 +15,12 @@ export default function ExamResultsPage() {
   const [room, setRoom] = useState<any>(null)
   const [exam, setExam] = useState<any>(null)
   const [submissions, setSubmissions] = useState<any[]>([])
-  const [roster, setRoster] = useState<any[]>([])   // ✅ MỚI: toàn bộ HS trong lớp của phòng
+  const [roster, setRoster] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [selectedSub, setSelectedSub] = useState<any>(null)
   const [showEssayGrader, setShowEssayGrader] = useState(false)
+  const [activeTab, setActiveTab] = useState<'submitted' | 'not_submitted'>('not_submitted')
 
   useEffect(() => {
     loadAllData()
@@ -35,7 +36,7 @@ export default function ExamResultsPage() {
         .single()
 
       setRoom(roomData)
-      setExam(roomData.exams)
+      setExam(roomData?.exams)
 
       const { data: subs } = await supabase
         .from('exam_submissions')
@@ -45,8 +46,6 @@ export default function ExamResultsPage() {
 
       setSubmissions(subs || [])
 
-      // ✅ MỚI: Lấy toàn bộ học sinh đang học trong lớp gắn với phòng thi
-      // để hiển thị cả những bạn CHƯA nộp (mặc định 0đ).
       const classId = roomData?.class_id
       if (classId) {
         const { data: enr } = await supabase
@@ -60,7 +59,6 @@ export default function ExamResultsPage() {
           .filter(Boolean)
         setRoster(list)
       } else {
-        // Phòng không gắn lớp → không có danh sách lớp, chỉ dựa vào bài nộp
         setRoster([])
       }
     } catch (err) {
@@ -70,22 +68,15 @@ export default function ExamResultsPage() {
     }
   }
 
-  // Xác định loại đề (TSA hay thường) - kiểm tra data.exam_type hoặc title prefix [TSA]
   const isTSAExam = exam?.data?.exam_type === 'tsa' || exam?.title?.startsWith('[TSA]')
 
-  // ✅ MỚI: Gộp danh sách lớp + bài nộp thành 1 bảng xếp hạng theo điểm.
-  // - Mỗi học sinh 1 dòng (nếu nộp nhiều lần thì lấy lần mới nhất).
-  // - HS chưa nộp → điểm 0, trạng thái "not_submitted".
-  // - Sắp xếp điểm giảm dần; cùng điểm thì người đã nộp xếp trên, rồi theo tên.
   const rows = useMemo(() => {
-    // submissions đã order submitted_at desc → bản ghi đầu là mới nhất.
     const subByStudent = new Map<string, any>()
     for (const sub of submissions) {
       const sid = sub.student_id
       if (sid && !subByStudent.has(sid)) subByStudent.set(sid, sub)
     }
 
-    // Hợp nhất: học sinh trong lớp + học sinh đã nộp nhưng không còn trong lớp.
     const studentMap = new Map<string, any>()
     for (const st of roster) {
       if (st?.id) studentMap.set(st.id, st)
@@ -105,7 +96,6 @@ export default function ExamResultsPage() {
       const sub = subByStudent.get(st.id) || null
       const sb = sub?.score_breakdown || {}
 
-      // ── Tính correctCount tuỳ loại đề ──
       let computedCorrectCount = 0
       let totalQCount = 0
 
@@ -125,16 +115,13 @@ export default function ExamResultsPage() {
           ((sb.multipleChoice?.total || 0) + (sb.trueFalse?.total || 0) + (sb.shortAnswer?.total || 0))
       }
 
-      // Trạng thái
       let status: 'submitted' | 'in_progress' | 'not_submitted'
       if (!sub) status = 'not_submitted'
       else if (sub.status === 'submitted') status = 'submitted'
       else status = 'in_progress'
 
-      // Điểm thật để hiển thị; điểm dùng sắp xếp (HS chưa nộp = 0)
       const rawScore = sub ? (sub.score ?? sb.totalScore ?? null) : null
       const sortScore = rawScore ?? 0
-
       const correctCount = sub ? (sub.correct_count ?? computedCorrectCount) : 0
 
       const formattedSub = sub ? {
@@ -180,131 +167,149 @@ export default function ExamResultsPage() {
 
   if (loading) return <div className="p-20 text-center text-teal-600 font-bold">Đang tải bảng điểm...</div>
 
-  const submittedCount = rows.filter(r => r.status === 'submitted').length
+  const submittedRows = rows.filter(r => r.status === 'submitted')
+  const notSubmittedRows = rows.filter(r => r.status === 'not_submitted' || r.status === 'in_progress')
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
+      
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button onClick={() => navigate('/exam-rooms')} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <ChevronLeft className="w-6 h-6 text-gray-600" />
           </button>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="section-title text-2xl">Kết quả: {room?.exams?.title}</h1>
-              {isTSAExam && (
-                <span className="bg-orange-100 text-orange-700 text-xs font-black px-2 py-0.5 rounded-full border border-orange-200">TSA</span>
-              )}
-            </div>
-            <p className="text-gray-400 text-sm">
-              Mã phòng: <span className="font-mono font-bold text-teal-600">{room?.code}</span>
-              {' · '}{rows.length} học sinh · đã nộp {submittedCount}/{rows.length}
+            <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+              Kết quả: {room?.exams?.title || room?.name}
+            </h1>
+            <p className="text-xs text-gray-500 font-medium mt-0.5">
+              Mã phòng: <strong className="font-mono text-teal-700 font-extrabold uppercase">{room?.code}</strong> · <span className="text-teal-600 font-bold">{submittedRows.length}/{rows.length} đã nộp</span> · <span className="text-rose-600 font-bold">{notSubmittedRows.length} chưa nộp</span>
             </p>
           </div>
         </div>
 
-        {/* Nút chấm tự luận chỉ hiện với đề thường */}
+        {/* Nút chấm tự luận */}
         {!isTSAExam && (
           <button
             onClick={() => setShowEssayGrader(true)}
-            className="btn-teal bg-violet-600 hover:bg-violet-700 flex items-center gap-2 w-max"
+            className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs px-5 py-3 rounded-2xl shadow-sm flex items-center gap-2"
           >
             <BrainCircuit className="w-4 h-4" /> Chấm Tự luận AI
           </button>
         )}
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="px-4 py-4 text-center font-bold text-gray-600 w-16">#</th>
-              <th className="px-6 py-4 text-left font-bold text-gray-600">Học sinh</th>
-              <th className="px-6 py-4 text-center font-bold text-gray-600">Trạng thái</th>
-              <th className="px-6 py-4 text-center font-bold text-gray-600">Điểm</th>
-              <th className="px-6 py-4 text-center font-bold text-gray-600">
-                {isTSAExam ? 'Câu đúng hoàn toàn' : 'Số câu đúng'}
-              </th>
-              <th className="px-6 py-4 text-right font-bold text-gray-600">Hành động</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {rows.map((row, idx) => {
-              const notSubmitted = row.status === 'not_submitted'
+      {/* Tabs Đã làm / Chưa làm exact like design 2 */}
+      <div className="border-b border-gray-200 flex items-center gap-6 text-sm font-bold">
+        <button
+          onClick={() => setActiveTab('submitted')}
+          className={`pb-3.5 transition-colors relative flex items-center gap-2 ${
+            activeTab === 'submitted'
+              ? 'text-teal-700 font-extrabold border-b-2 border-teal-600'
+              : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <span>📝 Đã làm ({submittedRows.length})</span>
+        </button>
 
-              return (
-                <tr
-                  key={row.key}
-                  className={`hover:bg-teal-50/30 transition-colors ${notSubmitted ? 'opacity-70' : ''}`}
-                >
-                  {/* Xếp hạng */}
-                  <td className="px-4 py-4 text-center">
-                    <span className={`font-black ${idx < 3 && !notSubmitted ? 'text-teal-600' : 'text-gray-400'}`}>
-                      {idx + 1}
-                    </span>
-                  </td>
+        <button
+          onClick={() => setActiveTab('not_submitted')}
+          className={`pb-3.5 transition-colors relative flex items-center gap-2 ${
+            activeTab === 'not_submitted'
+              ? 'text-teal-700 font-extrabold border-b-2 border-teal-600'
+              : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <span>⏳ Chưa làm ({notSubmittedRows.length})</span>
+        </button>
+      </div>
 
-                  {/* Học sinh */}
+      {/* Tab 1: Danh sách Chưa làm (Grid các thẻ học sinh) */}
+      {activeTab === 'not_submitted' && (
+        <div className="bg-emerald-50/30 rounded-3xl border border-teal-100 p-6 space-y-6 shadow-2xs">
+          {/* Box Cảnh báo màu vàng/đỏ nhạt đúng ảnh 2 */}
+          <div className="bg-rose-50/80 border border-rose-200/80 rounded-2xl p-4 flex items-center gap-3 text-rose-800 text-xs sm:text-sm font-bold">
+            <span className="text-lg">⚠️</span>
+            <span>Danh sách các bạn chưa hoàn thành bài tập về nhà, hãy nhanh chóng làm trước buổi học tiếp theo!!!!</span>
+          </div>
+
+          {/* Grid Học Sinh Chưa Làm (4 Cột) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {notSubmittedRows.map((row) => (
+              <div
+                key={row.key}
+                className="bg-white border border-gray-200/80 rounded-2xl p-4 text-center font-extrabold text-gray-800 text-sm shadow-2xs hover:border-teal-300 transition-colors"
+              >
+                {row.student.full_name || 'Học sinh'}
+              </div>
+            ))}
+          </div>
+
+          {notSubmittedRows.length === 0 && (
+            <div className="text-center py-10 text-xs text-gray-400 font-medium italic">
+              Tất cả học sinh đã hoàn thành bài tập! 🎉
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 2: Danh sách Đã làm (Bảng kết quả) */}
+      {activeTab === 'submitted' && (
+        <div className="card overflow-hidden bg-white rounded-3xl border border-teal-100 shadow-2xs">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="px-4 py-4 text-center font-bold text-gray-600 w-16">#</th>
+                <th className="px-6 py-4 text-left font-bold text-gray-600">Học sinh</th>
+                <th className="px-6 py-4 text-center font-bold text-gray-600">Trạng thái</th>
+                <th className="px-6 py-4 text-center font-bold text-gray-600">Điểm</th>
+                <th className="px-6 py-4 text-center font-bold text-gray-600">Số câu đúng</th>
+                <th className="px-6 py-4 text-right font-bold text-gray-600">Hành động</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {submittedRows.map((row, idx) => (
+                <tr key={row.key} className="hover:bg-teal-50/30 transition-colors">
+                  <td className="px-4 py-4 text-center font-bold text-teal-700">{idx + 1}</td>
                   <td className="px-6 py-4">
-                    <div className="font-bold text-gray-800">{row.student.full_name}</div>
+                    <div className="font-extrabold text-gray-800">{row.student.full_name}</div>
                     <div className="text-xs text-gray-400 font-mono">{row.student.student_code}</div>
                   </td>
-
-                  {/* Trạng thái */}
                   <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      row.status === 'submitted'
-                        ? 'bg-green-100 text-green-700'
-                        : row.status === 'in_progress'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {row.status === 'submitted'
-                        ? 'Đã nộp'
-                        : row.status === 'in_progress'
-                          ? 'Đang làm'
-                          : 'Chưa nộp'}
+                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-xs font-extrabold">
+                      Đã nộp
                     </span>
                   </td>
-
-                  {/* Điểm: HS chưa nộp mặc định 0.00 */}
-                  <td className={`px-6 py-4 text-center font-bold text-lg ${
-                    notSubmitted ? 'text-gray-400' : 'text-teal-600'
-                  }`}>
-                    {notSubmitted
-                      ? '0.00'
-                      : (row.rawScore != null ? row.rawScore.toFixed(2) : '—')}
+                  <td className="px-6 py-4 text-center font-black text-teal-700 text-lg">
+                    {row.rawScore != null ? row.rawScore.toFixed(2) : '—'}
                   </td>
-
-                  {/* Số câu đúng */}
-                  <td className="px-6 py-4 text-center text-gray-600">
-                    {row.status === 'submitted'
-                      ? <span className="font-semibold">{row.correctCount}<span className="text-gray-400 font-normal">/{row.totalQCount}</span></span>
-                      : notSubmitted
-                        ? <span className="text-gray-400">0<span className="font-normal">/{row.totalQCount}</span></span>
-                        : '—'}
+                  <td className="px-6 py-4 text-center text-gray-700 font-bold">
+                    {row.correctCount}/{row.totalQCount}
                   </td>
-
-                  {/* Hành động: chỉ có nút xem khi có bài nộp */}
                   <td className="px-6 py-4 text-right">
-                    {row.formattedSub ? (
+                    {row.formattedSub && (
                       <button
                         onClick={() => setSelectedSub(row.formattedSub)}
-                        className="p-2 text-teal-600 hover:bg-teal-100 rounded-lg transition-all"
+                        className="p-2 text-teal-600 hover:bg-teal-100 rounded-xl transition-all"
                         title="Xem chi tiết câu trả lời"
                       >
                         <Eye className="w-5 h-5" />
                       </button>
-                    ) : (
-                      <span className="text-gray-300">—</span>
                     )}
                   </td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+
+          {submittedRows.length === 0 && (
+            <div className="text-center py-12 text-xs text-gray-400 font-medium italic">
+              Chưa có học sinh nào nộp bài.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal chấm tự luận (chỉ đề thường) */}
       {!isTSAExam && (
@@ -321,10 +326,9 @@ export default function ExamResultsPage() {
 
       {/* Modal chi tiết bài làm */}
       {selectedSub && (() => {
-        // Lấy đúng đề học sinh đã làm
         const studentExam = selectedSub.scoreBreakdown?.shuffled_exam
           || selectedSub.score_breakdown?.shuffled_exam
-          || exam.data
+          || exam?.data
 
         const isThisTSA = studentExam?.exam_type === 'tsa' || isTSAExam
 
@@ -332,7 +336,7 @@ export default function ExamResultsPage() {
           return (
             <TSASubmissionDetailView
               submission={selectedSub}
-              exam={{ ...studentExam, title: exam.title }}
+              exam={{ ...studentExam, title: exam?.title }}
               room={room}
               onClose={() => setSelectedSub(null)}
             />
@@ -342,7 +346,7 @@ export default function ExamResultsPage() {
         return (
           <SubmissionDetailView
             submission={selectedSub}
-            exam={{ ...studentExam, title: exam.title }}
+            exam={{ ...studentExam, title: exam?.title }}
             room={room}
             onClose={() => setSelectedSub(null)}
           />

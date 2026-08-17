@@ -151,14 +151,22 @@ export default function ExamRoomsMgmt() {
         </div>
 
         {/* Right Area: Danh sách phòng thi */}
-        <div className="md:col-span-3 card p-6 min-h-[480px] flex flex-col">
-          <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
-            <h2 className="font-bold text-gray-800 text-base">
+        <div className="md:col-span-3 card p-6 min-h-[480px] flex flex-col bg-white rounded-3xl border border-teal-100 shadow-sm">
+          <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-5">
+            <h2 className="font-extrabold text-gray-800 text-base">
               Danh sách phòng thi Khối {selectedGrade}
             </h2>
-            <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+            <span className="text-xs font-bold text-gray-500 bg-gray-100/80 px-3.5 py-1 rounded-full border border-gray-200/60">
               Tổng cộng: {filteredRooms.length} phòng
             </span>
+          </div>
+
+          {/* Tab Filter Lớp nhỏ bên trong (Ví dụ LỚP 8 1) */}
+          <div className="flex items-center gap-2 mb-6">
+            <button className="bg-teal-600 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm">
+              <span className="uppercase">LỚP {selectedGrade}</span>
+              <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-md font-mono">{filteredRooms.length}</span>
+            </button>
           </div>
 
           {dataLoading ? (
@@ -176,90 +184,86 @@ export default function ExamRoomsMgmt() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ background: 'linear-gradient(135deg,#0d9488,#14b8a6)' }}>
-                    <th className="px-4 py-3.5 text-left text-white font-bold text-xs uppercase tracking-wider rounded-l-xl">Mã phòng</th>
-                    <th className="px-4 py-3.5 text-left text-white font-bold text-xs uppercase tracking-wider">Đề thi</th>
-                    <th className="px-4 py-3.5 text-left text-white font-bold text-xs uppercase tracking-wider">Lớp học</th>
-                    <th className="px-4 py-3.5 text-center text-white font-bold text-xs uppercase tracking-wider">Thời lượng</th>
-                    <th className="px-4 py-3.5 text-left text-white font-bold text-xs uppercase tracking-wider">Trạng thái</th>
-                    <th className="px-4 py-3.5 text-right text-white font-bold text-xs uppercase tracking-wider rounded-r-xl">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-teal-50">
-                  {filteredRooms.map((room, i) => (
-                    <tr key={room.id} className={`hover:bg-teal-50/40 transition-colors ${i % 2 === 0 ? '' : 'bg-teal-50/10'}`}>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="flex items-center gap-1.5 font-mono text-base font-extrabold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-xl border border-teal-200 w-max shadow-sm">
-                            <KeyRound className="w-3.5 h-3.5 opacity-50" /> {room.code}
-                          </span>
-                          {room.settings?.publicAccess && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                              <Globe className="w-3 h-3" /> Công khai
-                            </span>
-                          )}
-                          {room.exams?.title?.startsWith('[TSA]') && (
-                            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
-                              🎯 TSA
-                            </span>
-                          )}
+            <div className="space-y-3.5">
+              {filteredRooms.map((room) => {
+                const subCount = room.submission_count ?? 0
+                const studentTotal = room.student_total ?? 9 // Hiển thị số HS
+
+                return (
+                  <div
+                    key={room.id}
+                    className="bg-white border-2 border-teal-100/70 hover:border-teal-300/80 rounded-2xl p-4 sm:p-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all shadow-xs"
+                  >
+                    {/* Left: Code badge + Title */}
+                    <div className="flex items-center gap-3.5">
+                      <div className="bg-teal-50/80 border border-teal-200 text-teal-700 font-mono font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 shrink-0 shadow-2xs">
+                        <KeyRound className="w-4 h-4 text-teal-600 stroke-[2.5]" />
+                        <span className="tracking-wider">{room.code}</span>
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-gray-900 text-base uppercase tracking-tight leading-snug">
+                          {room.exams?.title || room.name || `Phòng thi ${room.code}`}
+                        </h3>
+                        <p className="text-xs text-gray-400 font-medium mt-0.5">
+                          Lớp học: <strong className="text-gray-600 font-bold uppercase">{(room.classes)?.class_name || (room.classes)?.name || 'LỚP ' + selectedGrade}</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right Info & Actions */}
+                    <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-between sm:justify-end">
+                      
+                      {/* ĐÃ LÀM BÀI 0/9 HS */}
+                      <div className="text-center px-1">
+                        <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">ĐÃ LÀM BÀI</div>
+                        <div className="text-sm font-black text-gray-800">
+                          <span className="text-teal-600">{subCount}</span> <span className="text-gray-400 font-normal">/ {studentTotal} HS</span>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 font-bold text-gray-800">{room.exams?.title || '—'}</td>
-                      <td className="px-4 py-4 text-gray-600 font-medium">
-                        {(room.classes)?.class_name || (room.classes)?.name || (room.settings?.publicAccess ? 'Tất cả' : '—')}
-                      </td>
-                      <td className="px-4 py-4 text-center font-bold text-gray-500">{room.time_limit} phút</td>
-                      <td className="px-4 py-4">
-                        <select
-                          value={room.status}
-                          onChange={(e) => updateRoomStatus(room.id, e.target.value)}
-                          className={`text-[11px] font-extrabold px-2.5 py-1.5 rounded-full outline-none border-2 cursor-pointer transition-all ${
-                            room.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' :
-                            room.status === 'closed' ? 'bg-red-50 text-red-700 border-red-200' :
-                            'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          <option value="waiting">🟡 CHỜ BẮT ĐẦU</option>
-                          <option value="active">🟢 ĐANG THI</option>
-                          <option value="closed">🔴 ĐÃ KHÓA</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-4 text-right flex justify-end gap-2">
-                        {room.settings?.publicAccess && (
-                          <button
-                            onClick={() => {
-                              const link = `${window.location.origin}/thi?code=${room.code}`
-                              navigator.clipboard.writeText(link).then(() => toast.success('Đã copy link thi công khai!'))
-                            }}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
-                            title="Copy link phòng công khai"
-                          >
-                            <Copy className="w-5 h-5" />
-                          </button>
-                        )}
+                      </div>
+
+                      {/* Thời lượng badge: 45 phút */}
+                      <div className="bg-gray-100/70 text-gray-600 font-bold text-xs px-3.5 py-1.5 rounded-full border border-gray-200/50 shrink-0">
+                        {room.time_limit} phút
+                      </div>
+
+                      {/* Nút Trạng thái dạng dropdown hoặc pill button xanh lá */}
+                      <select
+                        value={room.status}
+                        onChange={(e) => updateRoomStatus(room.id, e.target.value)}
+                        className={`text-xs font-extrabold px-3.5 py-1.5 rounded-full outline-none border cursor-pointer transition-all ${
+                          room.status === 'active' || room.status === 'waiting'
+                            ? 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600'
+                            : 'bg-rose-50 text-rose-600 border-rose-200'
+                        }`}
+                      >
+                        <option value="active" className="bg-white text-gray-800">🟢 Thi</option>
+                        <option value="waiting" className="bg-white text-gray-800">🟡 Chờ thi</option>
+                        <option value="closed" className="bg-white text-gray-800">🔴 Đã khóa</option>
+                      </select>
+
+                      {/* Action Icons (Báo cáo kết quả | Cài đặt | Xóa) */}
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => navigate(`/exam-results/${room.id}`)}
-                          className="p-2 text-teal-600 hover:bg-teal-100 rounded-xl transition-all border border-transparent hover:border-teal-200"
-                          title="Xem bảng điểm & kết quả"
+                          className="p-2 text-teal-600 hover:bg-teal-50 rounded-xl transition-colors"
+                          title="Xem bảng kết quả thi"
                         >
-                          <BarChart3 className="w-5 h-5" />
+                          <BarChart3 className="w-4 h-4 stroke-[2.5]" />
                         </button>
+
                         <button
                           onClick={() => handleDelete(room.id, room.code)}
-                          className="p-2 text-red-400 hover:bg-red-50 rounded-xl transition-all"
-                          title="Xóa phòng"
+                          className="p-2 text-rose-400 hover:bg-rose-50 rounded-xl transition-colors"
+                          title="Xóa phòng thi"
                         >
-                          <Trash2 className="w-5 h-5" />
+                          <Trash2 className="w-4 h-4 stroke-[2.5]" />
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
