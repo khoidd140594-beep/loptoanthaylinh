@@ -68,26 +68,16 @@ export default function StudentPortal() {
 
       setSubmissions(subData || [])
 
-      // 3. Tải các phòng thi liên quan
-      let roomQuery = supabase
+      // 3. Tải tất cả các phòng thi hiện có để học sinh thấy bài được giao
+      const { data: allRooms, error: roomsErr } = await supabase
         .from('exam_rooms')
         .select('*, exams(id, title, duration), classes(id, class_name)')
         .order('created_at', { ascending: false })
 
-      if (myClassIds.length > 0) {
-        roomQuery = roomQuery.or(`class_id.in.(${myClassIds.join(',')}),class_id.is.null`)
+      if (roomsErr) {
+        console.error('Lỗi tải phòng thi:', roomsErr)
       }
-
-      const { data: rooms, error: roomsErr } = await roomQuery
-      if (roomsErr || !rooms || rooms.length === 0) {
-        const { data: allRooms } = await supabase
-          .from('exam_rooms')
-          .select('*, exams(id, title, duration), classes(id, class_name)')
-          .order('created_at', { ascending: false })
-        setExamRooms(allRooms || [])
-      } else {
-        setExamRooms(rooms)
-      }
+      setExamRooms(allRooms || [])
 
       // 4. Tải khóa học
       const { data: allCourses } = await supabase
