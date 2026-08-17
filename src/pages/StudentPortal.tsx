@@ -333,9 +333,6 @@ export default function StudentPortal() {
     return sessions
   }, [examRooms, submissions])
 
-    return sessions
-  }, [examRooms, submissions])
-
   // Đếm số bài tập chưa làm
   const uncompletedExamsCount = useMemo(() => {
     let count = 0
