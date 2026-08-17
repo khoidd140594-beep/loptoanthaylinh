@@ -249,11 +249,16 @@ export default function StudentPortal() {
       }
     })
 
-    const allSessionNums = Array.from(
-      new Set([...Array.from(sessionMap.keys()), 5, 4, 3, 2, 1])
-    ).sort((a, b) => b - a)
+    // 2. Tạo danh sách hiển thị
+    const sessions: any[] = []
 
-    const sessions = allSessionNums.map(sessionNum => {
+    // Đưa tất cả các buổi đã tìm thấy trong DB vào danh sách
+    const sessionNums = Array.from(sessionMap.keys()).sort((a, b) => b - a)
+
+    // Nếu có buổi tìm thấy thì hiện các buổi đó + các buổi mặc định 5,4,3,2,1 nếu chưa có
+    const finalSessionNums = Array.from(new Set([...sessionNums, 5, 4, 3, 2, 1])).sort((a, b) => b - a)
+
+    finalSessionNums.forEach(sessionNum => {
       const sObj = sessionMap.get(sessionNum) || {}
       const de1Room = sObj.de1Room
       const de2Room = sObj.de2Room
@@ -261,7 +266,7 @@ export default function StudentPortal() {
       const de1Sub = submissions.find(s => de1Room && s.room_id === de1Room.id)
       const de2Sub = submissions.find(s => de2Room && s.room_id === de2Room.id)
 
-      return {
+      sessions.push({
         sessionNum,
         name: `Buổi ${sessionNum}`,
         exams: [
@@ -280,7 +285,7 @@ export default function StudentPortal() {
             statusText: de1Sub ? `${de1Sub.score ?? de1Sub.total_score}đ` : de1Room ? 'Chưa thi' : '—'
           }
         ]
-      }
+      })
     })
 
     // Gom các phòng thi còn lại (không ghi số buổi rõ ràng)
