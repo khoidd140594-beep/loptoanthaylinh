@@ -602,6 +602,121 @@ export default function StudentPortal() {
 
         </div>
 
+        {/* ── SECTION: Bài Thi Chưa Làm ──────────────────────────────── */}
+        <div className="space-y-4 pt-4">
+          <div className="flex items-center gap-2 border-b-2 border-teal-600 pb-3">
+            <BookOpen className="w-5 h-5 text-teal-600 stroke-[2.5]" />
+            <h3 className="font-extrabold text-lg text-teal-900">
+              Bài Thi Chưa Làm ({examRooms.filter(r => r.status !== 'closed' && !submissions.some(s => s.room_id === r.id)).length})
+            </h3>
+          </div>
+
+          {examRooms.filter(r => r.status !== 'closed' && !submissions.some(s => s.room_id === r.id)).length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {examRooms.filter(r => r.status !== 'closed' && !submissions.some(s => s.room_id === r.id)).map(room => (
+                <div
+                  key={room.id}
+                  className="bg-white rounded-3xl border-2 border-teal-100/80 p-5 space-y-4 shadow-2xs hover:border-teal-300 transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="bg-teal-50 text-teal-700 font-extrabold text-[11px] px-3 py-1 rounded-lg uppercase border border-teal-200/60">
+                        {room.classes?.class_name || 'LỚP 8'}
+                      </span>
+                      <span className="bg-teal-50 text-teal-600 font-bold text-[11px] px-3 py-1 rounded-full border border-teal-100">
+                        Đang mở
+                      </span>
+                    </div>
+
+                    <h4 className="font-extrabold text-gray-900 text-base leading-snug pt-1">
+                      {room.exams?.title || room.name || `TOÁN 8 – BUỔI 05 – ĐỀ 01`}
+                    </h4>
+
+                    <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5 pt-1">
+                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                      <span>Thời gian: {room.time_limit || room.exams?.duration || 45} phút</span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <span className="text-xs text-gray-400 font-medium">
+                      Mã phòng: <strong className="font-mono text-gray-700 font-bold uppercase">{room.code}</strong>
+                    </span>
+
+                    <button
+                      onClick={() => navigate(`/exam-room/${room.id}`)}
+                      className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-sm inline-flex items-center gap-1.5 transition-all transform active:scale-95"
+                    >
+                      <span>Làm bài</span>
+                      <Zap className="w-3.5 h-3.5 fill-current text-amber-300" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-teal-100 p-8 text-center text-xs text-gray-400 font-medium shadow-2xs">
+              Hiện tại không có bài thi chưa làm!
+            </div>
+          )}
+        </div>
+
+        {/* ── SECTION: Bài Thi Đã Hoàn Thành ─────────────────────────── */}
+        <div className="space-y-4 pt-4">
+          <div className="flex items-center gap-2 border-b-2 border-teal-600 pb-3">
+            <CheckCircle2 className="w-5 h-5 text-teal-600 stroke-[2.5]" />
+            <h3 className="font-extrabold text-lg text-teal-900">
+              Bài Thi Đã Hoàn Thành ({submissions.length})
+            </h3>
+          </div>
+
+          {submissions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {submissions.map(sub => {
+                const room = examRooms.find(r => r.id === sub.room_id)
+                return (
+                  <div
+                    key={sub.id}
+                    className="bg-white rounded-3xl border-2 border-teal-100/80 p-5 space-y-4 shadow-2xs hover:border-teal-300 transition-all flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="bg-emerald-50 text-emerald-700 font-extrabold text-[11px] px-3 py-1 rounded-lg border border-emerald-200">
+                          {sub.score ?? sub.total_score ?? 0}đ
+                        </span>
+                        <span className="bg-emerald-50 text-emerald-600 font-bold text-[11px] px-3 py-1 rounded-full border border-emerald-100">
+                          Đã nộp
+                        </span>
+                      </div>
+
+                      <h4 className="font-extrabold text-gray-900 text-base leading-snug pt-1">
+                        {room?.exams?.title || room?.name || 'Bài thi đã nộp'}
+                      </h4>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      <span className="text-xs text-gray-400 font-medium">
+                        Điểm số: <strong className="text-teal-700 font-black text-sm">{sub.score ?? sub.total_score ?? '—'}đ</strong>
+                      </span>
+
+                      <button
+                        onClick={() => navigate(`/exam-room/${sub.room_id}`)}
+                        className="bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 text-xs font-extrabold px-4 py-2 rounded-xl transition-all"
+                      >
+                        Xem lại bài
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-teal-100 p-10 text-center text-xs sm:text-sm text-gray-400 font-medium shadow-2xs">
+              Chưa có bài thi nào hoàn thành. Hãy làm bài để xem kết quả!
+            </div>
+          )}
+        </div>
+
       </main>
 
       {/* ── MODAL: Đổi mật khẩu ─────────────────────────────────────── */}
