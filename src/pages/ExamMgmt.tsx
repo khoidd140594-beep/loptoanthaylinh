@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { FileUp, FileText, Trash2, RefreshCw, Eye, Edit2, Save, X, Settings, Target, Paperclip } from 'lucide-react'
 import { useExamStore } from '@/store/examStore'
 import { parseWordToExam } from '@/services/mathWordParserService'
+import { parseTexToExam } from '@/services/texParserService'
 import { createDefaultPointsConfig } from '@/services/scoringService'
 import { parseTexToTSAExam, validateTSAExamData } from '@/services/tsaParserService'
 import { buildDefaultPointsConfig } from '@/services/tsaScoringService'
@@ -49,21 +50,42 @@ export default function ExamMgmt() {
     void loadExams()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Upload đề Word ───────────────────────────────────────────────────────
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Upload đề Word (.docx) ────────────────────────────────────────────────
+  const handleUploadWord = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
     const toastId = toast.loading('Đang phân tích file Word...')
     try {
       const examData = await parseWordToExam(file)
-      examData.pointsConfig = createDefaultPointsConfig(examData.questions)
+      examData.pointsConfig = createDefaultPointsConfig(examData.questions || [])
       toast.loading('Đang lưu lên Supabase...', { id: toastId })
       const title = file.name.replace(/\.docx$/i, '')
       await createExam(examData, title)
-      toast.success('Tải đề thi thành công!', { id: toastId })
+      toast.success('Tải đề thi Word thành công!', { id: toastId })
     } catch (error: any) {
       toast.error(`Lỗi: ${error.message || 'Không thể đọc file Word'}`, { id: toastId })
+    } finally {
+      setUploading(false)
+      if (e.target) e.target.value = ''
+    }
+  }
+
+  // ── Upload đề LaTeX (.tex) ─────────────────────────────────────────────────
+  const handleUploadLatex = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const toastId = toast.loading('Đang phân tích file LaTeX...')
+    try {
+      const examData = await parseTexToExam(file, (msg) => console.log(msg))
+      examData.pointsConfig = createDefaultPointsConfig(examData.questions || [])
+      toast.loading('Đang lưu lên Supabase...', { id: toastId })
+      const title = file.name.replace(/\.tex$/i, '')
+      await createExam(examData, title)
+      toast.success('Tải đề thi LaTeX thành công!', { id: toastId })
+    } catch (error: any) {
+      toast.error(`Lỗi: ${error.message || 'Không thể đọc file LaTeX'}`, { id: toastId })
     } finally {
       setUploading(false)
       if (e.target) e.target.value = ''
@@ -227,13 +249,21 @@ export default function ExamMgmt() {
           <p className="text-gray-400 text-sm mt-1">Phân tích tự động và cấu hình điểm thi</p>
         </div>
 
-        {/* Upload button - chỉ hiện khi ở tab thường */}
+        {/* Upload buttons - chỉ hiện khi ở tab thường */}
         {activeTab === 'normal' && (
-          <label className={`btn-teal flex items-center gap-2 cursor-pointer ${uploading ? 'opacity-70 pointer-events-none' : ''}`}>
-            {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
-            {uploading ? 'Đang xử lý...' : 'Tải lên từ Word'}
-            <input type="file" accept=".docx" className="hidden" onChange={handleFileUpload} disabled={uploading} />
-          </label>
+          <div className="flex items-center gap-3">
+            <label className={`btn-teal flex items-center gap-2 cursor-pointer ${uploading ? 'opacity-70 pointer-events-none' : ''}`}>
+              {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+              {uploading ? 'Đang xử lý...' : 'Tải lên từ Word'}
+              <input type="file" accept=".docx" className="hidden" onChange={handleUploadWord} disabled={uploading} />
+            </label>
+
+            <label className={`px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer ${uploading ? 'opacity-70 pointer-events-none' : ''}`}>
+              {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+              {uploading ? 'Đang xử lý...' : 'Tải lên từ LaTeX'}
+              <input type="file" accept=".tex" className="hidden" onChange={handleUploadLatex} disabled={uploading} />
+            </label>
+          </div>
         )}
       </div>
 
@@ -249,7 +279,7 @@ export default function ExamMgmt() {
         >
           <FileText className="w-4 h-4" /> Đề thường
           <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-1.5 py-0.5 rounded-full">
-            Word / PDF
+            LaTeX / Word
           </span>
         </button>
         <button
