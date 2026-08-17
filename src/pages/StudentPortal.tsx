@@ -92,11 +92,18 @@ export default function StudentPortal() {
         const exMap = new Map((exRes.data || []).map((e: any) => [e.id, e]))
         const clsMap = new Map((clsRes.data || []).map((c: any) => [c.id, c]))
 
-        finalRooms = finalRooms.map(r => ({
-          ...r,
-          exams: exMap.get(r.exam_id) || { title: `Đề thi mã ${r.code}`, duration: r.duration || 45 },
-          classes: clsMap.get(r.class_id) || { class_name: 'Lớp học' }
-        }))
+        finalRooms = finalRooms.map(r => {
+          const exObj = exMap.get(r.exam_id)
+          const roomTitle = r.name || r.title || exObj?.title || (r.exams && r.exams.title) || `Bài thi mã ${r.code}`
+          return {
+            ...r,
+            exams: {
+              title: roomTitle,
+              duration: r.duration || exObj?.duration || 45
+            },
+            classes: clsMap.get(r.class_id) || r.classes || { class_name: 'Lớp học' }
+          }
+        })
       }
 
       setExamRooms(finalRooms)
