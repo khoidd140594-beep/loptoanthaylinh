@@ -68,34 +68,35 @@ export default function StudentPortal() {
 
       setSubmissions(subData || [])
 
-      // 3. Tải tất cả các phòng thi hiện có + tự động fetch chi tiết đề thi
+      // 3. Tải tất cả các phòng thi trong hệ thống mà không lọc bất kỳ điều kiện nào
       const { data: allRooms, error: roomsErr } = await supabase
         .from('exam_rooms')
-        .select('*, exams(id, title, duration), classes(id, class_name)')
+        .select('*')
         .order('created_at', { ascending: false })
 
       if (roomsErr) {
-        console.error('Lỗi tải phòng thi:', roomsErr)
+        console.error('Lỗi tải phòng thi Supabase:', roomsErr)
       }
 
-      // Đảm bảo thông tin đề thi luôn luôn có dữ liệu (Fallback nếu Supabase join bị trống)
       let finalRooms = allRooms || []
       if (finalRooms.length > 0) {
+        // Fetch trực tiếp thông tin tên đề thi & lớp học từ Supabase
         const examIds = Array.from(new Set(finalRooms.map(r => r.exam_id).filter(Boolean)))
-        if (examIds.length > 0) {
-          const { data: exData } = await supabase
-            .from('exams')
-            .select('id, title, duration')
-            .in('id', examIds)
+        const classIds = Array.from(new Set(finalRooms.map(r => r.class_id).filter(Boolean)))
 
-          if (exData && exData.length > 0) {
-            const exMap = new Map(exData.map(e => [e.id, e]))
-            finalRooms = finalRooms.map(r => ({
-              ...r,
-              exams: r.exams || exMap.get(r.exam_id) || null
-            }))
-          }
-        }
+        const [exRes, clsRes] = await Promise.all([
+          examIds.length > 0 ? supabase.from('exams').select('id, title, duration').in('id', examIds) : { data: [] },
+          classIds.length > 0 ? supabase.from('classes').select('id, class_name').in('id', classIds) : { data: [] }
+        ])
+
+        const exMap = new Map((exRes.data || []).map((e: any) => [e.id, e]))
+        const clsMap = new Map((clsRes.data || []).map((c: any) => [c.id, c]))
+
+        finalRooms = finalRooms.map(r => ({
+          ...r,
+          exams: exMap.get(r.exam_id) || { title: `Đề thi mã ${r.code}`, duration: r.duration || 45 },
+          classes: clsMap.get(r.class_id) || { class_name: 'Lớp học' }
+        }))
       }
 
       setExamRooms(finalRooms)
