@@ -64,6 +64,21 @@ export default function ExamRoomPage() {
           return
         }
 
+        // Kiểm tra xem học sinh có thuộc lớp được giao đề thi này không
+        if (roomData.class_id && !roomData.settings?.publicAccess) {
+          const { data: enrollment } = await supabase
+            .from('enrollments')
+            .select('id')
+            .eq('student_id', savedStudent.id)
+            .eq('class_id', roomData.class_id)
+            .eq('status', 'active')
+            .maybeSingle()
+
+          if (!enrollment) {
+            throw new Error('Bạn không thuộc lớp học được giao bài thi này!')
+          }
+        }
+
         setStudent(savedStudent)
         await loadExamData(roomData, savedStudent)
       } catch (err: any) {

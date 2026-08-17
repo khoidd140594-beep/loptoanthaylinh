@@ -68,7 +68,7 @@ export default function StudentPortal() {
 
       setSubmissions(subData || [])
 
-      // 3. Tải tất cả các phòng thi trong hệ thống mà không lọc bất kỳ điều kiện nào
+      // 3. Tải tất cả các phòng thi trong hệ thống và lọc theo lớp học của học sinh
       const { data: allRooms, error: roomsErr } = await supabase
         .from('exam_rooms')
         .select('*')
@@ -78,7 +78,14 @@ export default function StudentPortal() {
         console.error('Lỗi tải phòng thi Supabase:', roomsErr)
       }
 
-      let finalRooms = allRooms || []
+      // Chỉ lấy phòng thi thuộc lớp của học sinh (hoặc phòng mở công khai)
+      const allowedRooms = (allRooms || []).filter(r => {
+        if (r.settings?.publicAccess) return true
+        if (r.class_id && myClassIds.includes(r.class_id)) return true
+        return false
+      })
+
+      let finalRooms = allowedRooms
       if (finalRooms.length > 0) {
         // Fetch trực tiếp thông tin tên đề thi & lớp học từ Supabase
         const examIds = Array.from(new Set(finalRooms.map(r => r.exam_id).filter(Boolean)))
