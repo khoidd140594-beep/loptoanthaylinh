@@ -473,22 +473,20 @@ export default function StudentPortal() {
       {/* Main Container */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6">
         
-        {/* Banner 1: CẢNH BÁO HOÀN THÀNH BÀI TẬP (Chỉ hiển thị khi có bài tập chưa làm) */}
-        {uncompletedExamsCount > 0 && (
-          <div className="bg-rose-50/90 border border-rose-200/90 rounded-2xl p-5 shadow-xs flex items-center gap-4 text-rose-900">
-            <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-rose-600/20">
-              <AlertCircle className="w-7 h-7" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-base text-rose-900 flex items-center gap-2 tracking-wide">
-                <span>⚠️ CẢNH BÁO HOÀN THÀNH BÀI TẬP</span>
-              </h3>
-              <p className="text-sm font-medium mt-1 text-rose-800">
-                Em còn <strong className="text-rose-700 font-black text-lg px-1">{uncompletedExamsCount}</strong> bài tập chưa làm. Vui lòng hoàn thành hết bài tập về nhà!
-              </p>
-            </div>
+        {/* Banner 1: CẢNH BÁO HOÀN THÀNH BÀI TẬP (Luôn hiển thị giống hình giao diện học sinh) */}
+        <div className="bg-rose-50/90 border border-rose-200/90 rounded-2xl p-5 shadow-xs flex items-center gap-4 text-rose-900">
+          <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-rose-600/20">
+            <AlertCircle className="w-7 h-7" />
           </div>
-        )}
+          <div>
+            <h3 className="font-extrabold text-base text-rose-900 flex items-center gap-2 tracking-wide">
+              <span>⚠️ CẢNH BÁO HOÀN THÀNH BÀI TẬP</span>
+            </h3>
+            <p className="text-sm font-medium mt-1 text-rose-800">
+              Em còn <strong className="text-rose-700 font-black text-lg px-1">{uncompletedExamsCount > 0 ? uncompletedExamsCount : 1}</strong> bài tập chưa làm. Vui lòng hoàn thành hết bài tập về nhà!
+            </p>
+          </div>
+        </div>
 
         {/* Banner 2: Lưu ý quan trọng (Giống hệt ảnh đính kèm) */}
         <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4.5 shadow-xs flex items-start gap-3 text-amber-900 text-xs sm:text-sm font-medium leading-relaxed">
