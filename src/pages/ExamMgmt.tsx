@@ -7,6 +7,7 @@ import { createDefaultPointsConfig } from '@/services/scoringService'
 import { parseTexToTSAExam, validateTSAExamData } from '@/services/tsaParserService'
 import { buildDefaultPointsConfig } from '@/services/tsaScoringService'
 import { shuffleExamForStudent } from '@/services/mergeExamsService'
+import { generateSimilarExamWithAI } from '@/services/similarQuestionService'
 import { fmt } from '@/lib/helpers'
 import { supabase } from '@/lib/supabase'
 import Modal from '@/components/Modal'
@@ -144,27 +145,82 @@ export default function ExamMgmt() {
     }
   }
 
-  // ── 3. Tạo đề tương tự (Đảo câu & đáp án) ──
-  const handleCreateSimilarExam = async (exam: any) => {
-    const toastId = toast.loading('Đang khởi tạo đề thi tương tự (Đảo câu & đáp án)...')
+  // ── 3. AI Sinh Đề Tương Tự (Thay số & Tạo bài toán mới bằng Gemini API) ──
+  const [aiSimilarModalExam, setAiSimilarModalExam] = useState<any>(null)
+  const [aiApiKey, setAiApiKey]                     = useState('')
+  const [aiModel, setAiModel]                       = useState('gemini-1.5-flash')
+  const [aiGenerating, setAiGenerating]             = useState(false)
+  const [aiStatusMsg, setAiStatusMsg]               = useState('')
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem('ocr_gemini_key') || localStorage.getItem('similar_question_gemini_key') || ''
+    if (savedKey) setAiApiKey(savedKey)
+  }, [])
+
+  const handleCreateSimilarExam = (exam: any) => {
+    setAiSimilarModalExam(exam)
+  }
+
+  const handleRunAiGenerateSimilar = async () => {
+    if (!aiApiKey.trim()) return toast.error('Vui lòng nhập Gemini API Key!')
+    localStorage.setItem('ocr_gemini_key', aiApiKey.trim())
+
+    setAiGenerating(true)
+    setAiStatusMsg('Đang gửi yêu cầu cho AI...')
+    const toastId = toast.loading('AI đang phân tích và thay số các bài toán...')
+
     try {
-      const rawData = await getExamData(exam.id)
+      const rawData = await getExamData(aiSimilarModalExam.id)
+      if (!rawData) throw new Error('Không lấy được dữ liệu đề thi gốc')
+
+      const result = await generateSimilarExamWithAI({
+        examTitle: aiSimilarModalExam.title,
+        questions: rawData.questions || [],
+        apiKey: aiApiKey.trim(),
+        model: aiModel,
+        onProgress: (msg) => setAiStatusMsg(msg)
+      })
+
+      const newExamData = {
+        ...rawData,
+        questions: result.questions,
+        title: result.title
+      }
+
+      await createExam(newExamData, result.title)
+      toast.success(`🎉 Đã sinh đề AI thay số thành công: "${result.title}"!`, { id: toastId })
+      setAiSimilarModalExam(null)
+      loadExams()
+    } catch (err: any) {
+      toast.error('Lỗi sinh đề AI: ' + (err.message || ''), { id: toastId })
+    } finally {
+      setAiGenerating(false)
+      setAiStatusMsg('')
+    }
+  }
+
+  const handleRunShuffleQuick = async () => {
+    if (!aiSimilarModalExam) return
+    setAiGenerating(true)
+    const toastId = toast.loading('Đang đảo câu & đáp án đề thi...')
+    try {
+      const rawData = await getExamData(aiSimilarModalExam.id)
       if (!rawData) throw new Error('Không lấy được dữ liệu đề thi gốc')
 
       const shuffledData = shuffleExamForStudent(rawData)
-      const oldTitle = exam.title || 'Đề thi'
-      let newTitle = oldTitle
-      if (oldTitle.includes('ĐỀ 01') || oldTitle.includes('ĐỀ 1')) {
-        newTitle = oldTitle.replace(/ĐỀ (0?1)/i, 'ĐỀ 02')
-      } else {
-        newTitle = `[Đề tương tự] ${oldTitle}`
-      }
+      const oldTitle = aiSimilarModalExam.title || 'Đề thi'
+      const newTitle = oldTitle.includes('ĐỀ 01') || oldTitle.includes('ĐỀ 1')
+        ? oldTitle.replace(/ĐỀ (0?1)/i, 'ĐỀ 02')
+        : `[Đề đảo] ${oldTitle}`
 
       await createExam(shuffledData, newTitle)
-      toast.success(`🎉 Đã tạo đề tương tự "${newTitle}" thành công!`, { id: toastId })
+      toast.success(`🎉 Đã tạo đề đảo thành công!`, { id: toastId })
+      setAiSimilarModalExam(null)
       loadExams()
     } catch (err: any) {
-      toast.error('Lỗi tạo đề tương tự: ' + (err.message || ''), { id: toastId })
+      toast.error('Lỗi: ' + (err.message || ''), { id: toastId })
+    } finally {
+      setAiGenerating(false)
     }
   }
 
@@ -1076,6 +1132,87 @@ export default function ExamMgmt() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* ── MODAL AI SINH ĐỀ TƯƠNG TỰ (THAY SỐ) ── */}
+      <Modal
+        open={Boolean(aiSimilarModalExam)}
+        onClose={() => !aiGenerating && setAiSimilarModalExam(null)}
+        title={`🪄 AI Sinh Đề Thi Tương Tự (Thay số & Tạo bài toán mới)`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl">
+            <h4 className="font-extrabold text-purple-900 text-sm flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              Đề thi gốc: {aiSimilarModalExam?.title}
+            </h4>
+            <p className="text-xs text-purple-700 mt-1 leading-relaxed">
+              Hệ thống AI Gemini sẽ phân tích cấu trúc bài toán, <strong>thay đổi toàn bộ số liệu, bối cảnh bài toán và tính lại đáp án chuẩn</strong> để tạo nên một đề thi hoàn toàn mới.
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Gemini API Key *</label>
+            <input
+              type="password"
+              value={aiApiKey}
+              onChange={e => setAiApiKey(e.target.value)}
+              placeholder="AIzaSy..."
+              className="input font-mono text-xs"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">
+              🔑 Nếu chưa có key, bạn lấy miễn phí tại <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" className="text-teal-600 underline">aistudio.google.com</a>
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Chọn Model AI</label>
+            <select
+              value={aiModel}
+              onChange={e => setAiModel(e.target.value)}
+              className="input"
+            >
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash (Tốc độ cao - Khuyên dùng)</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash (Thế hệ mới)</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro (Tư duy toán học chuyên sâu)</option>
+            </select>
+          </div>
+
+          {aiStatusMsg && (
+            <div className="text-xs font-semibold text-purple-700 bg-purple-50 p-2.5 rounded-xl border border-purple-100 animate-pulse text-center">
+              {aiStatusMsg}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
+            <button
+              onClick={handleRunAiGenerateSimilar}
+              disabled={aiGenerating}
+              className="btn-teal py-3 text-xs font-extrabold shadow-md flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white border-0"
+            >
+              {aiGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {aiGenerating ? 'Đang gọi AI sinh đề mới...' : '🚀 Bắt đầu sinh đề thi AI (Thay số & Tạo toán mới)'}
+            </button>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button
+                onClick={handleRunShuffleQuick}
+                disabled={aiGenerating}
+                className="text-xs text-gray-500 hover:text-teal-700 font-semibold underline"
+              >
+                ⚡ Chỉ đảo vị trí câu & đáp án (Không dùng AI)
+              </button>
+              <button
+                onClick={() => setAiSimilarModalExam(null)}
+                disabled={aiGenerating}
+                className="btn-outline text-xs px-4 py-1.5"
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   )

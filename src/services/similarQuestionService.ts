@@ -238,3 +238,105 @@ export async function testApiKey(
     return { ok: false, error: e.message }
   }
 }
+
+// ─── Gọi API Gemini để sinh đề thi tương tự (Thay số & tạo bài toán mới) ───────
+export async function generateSimilarExamWithAI({
+  examTitle,
+  questions,
+  apiKey,
+  model = 'gemini-1.5-flash',
+  onProgress
+}: {
+  examTitle: string;
+  questions: any[];
+  apiKey: string;
+  model?: string;
+  onProgress?: (msg: string) => void;
+}): Promise<{ title: string; questions: any[] }> {
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error("Vui lòng nhập Gemini API Key để thực hiện sinh đề thi AI thay số!");
+  }
+
+  onProgress?.("📋 Đang phân tích cấu trúc đề thi gốc...");
+
+  const questionsPromptText = (questions || []).map((q: any, i: number) => {
+    let qStr = `CÂU ${q.number || i + 1} (${q.type || 'multiple_choice'}):\n${stripHtml(q.text || '')}\n`;
+    if (q.options && q.options.length > 0) {
+      q.options.forEach((opt: any) => {
+        qStr += `  ${opt.letter || 'A'}. ${stripHtml(opt.text || '')}\n`;
+      });
+    }
+    if (q.correctAnswer) qStr += `Đáp án đúng: ${q.correctAnswer}\n`;
+    if (q.solution) qStr += `Lời giải: ${stripHtml(q.solution || '')}\n`;
+    return qStr;
+  }).join("\n---\n");
+
+  const systemPrompt = `Bạn là chuyên gia biên soạn đề thi Toán/Khoa học hàng đầu Việt Nam.
+
+TÊN ĐỀ THI GỐC: "${examTitle}"
+
+DANH SÁCH CÂU HỎI ĐỀ THI GỐC:
+${questionsPromptText}
+
+NHIỆM VỤ:
+Tạo 1 ĐỀ THI MỚI HOÀN TOÀN TƯƠNG TỰ đề thi gốc bằng cách:
+1. Giữ nguyên dạng toán, chủ đề kiến thức và cấu trúc từng câu.
+2. THAY ĐỔI TOÀN BỘ SỐ LIỆU, ĐẦU BÀI, THAY ĐỔI BỐI CẢNH để tạo nên các BÀI TOÁN MỚI HOÀN TOÀN.
+3. Tính toán lại CHÍNH XÁC kết quả, tạo nghiệm đẹp, tính lại đáp án đúng (A/B/C/D) và viết LỜI GIẢI CHI TIẾT từng bước.
+4. Mọi công thức Toán phải dùng LaTeX: bọc $...$ cho công thức trong dòng, và $$...$$ cho công thức riêng dòng.
+
+ĐỊNH DẠNG KẾT QUẢ TRẢ VỀ (CHỈ TRẢ VỀ JSON HỢP LỆ, KHÔNG MỞ ĐẦU HOẶC KẾT THÚC BẰNG BẤT KỲ VĂN BẢN NÀO KHÁC):
+{
+  "title": "[Đề thay số AI] ${examTitle}",
+  "questions": [
+    {
+      "number": 1,
+      "text": "Nội dung bài toán mới với số liệu đã thay đổi...",
+      "type": "multiple_choice",
+      "options": [
+        { "letter": "A", "text": "Đáp án A mới" },
+        { "letter": "B", "text": "Đáp án B mới" },
+        { "letter": "C", "text": "Đáp án C mới" },
+        { "letter": "D", "text": "Đáp án D mới" }
+      ],
+      "correctAnswer": "A",
+      "solution": "Lời giải chi tiết từng bước..."
+    }
+  ]
+}`;
+
+  onProgress?.("🤖 Đang gọi Gemini API để sáng tạo bài toán mới & thay số...");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: systemPrompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.7,
+        maxOutputTokens: 65536
+      }
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Lỗi AI API (HTTP ${res.status})`);
+  }
+
+  const jsonRes = await res.json();
+  const rawText = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!rawText) throw new Error('Gemini không trả về dữ liệu');
+
+  onProgress?.("🔍 Đang tổng hợp đề thi mới...");
+  const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const parsed = JSON.parse(cleanJson);
+
+  return {
+    title: parsed.title || `[Đề thay số AI] ${examTitle}`,
+    questions: parsed.questions || []
+  };
+}
+
