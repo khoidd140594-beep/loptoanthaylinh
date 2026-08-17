@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { FileUp, FileText, Trash2, RefreshCw, Eye, Edit2, Save, X, Settings, Target, Paperclip, AlertCircle, Copy } from 'lucide-react'
+import { FileUp, FileText, Trash2, RefreshCw, Eye, Edit2, Save, X, Settings, Target, Paperclip, AlertCircle, Copy, BookOpen, Download, Sparkles, Printer } from 'lucide-react'
 import { useExamStore } from '@/store/examStore'
 import { parseWordToExam } from '@/services/mathWordParserService'
 import { parseTexToExam } from '@/services/texParserService'
 import { createDefaultPointsConfig } from '@/services/scoringService'
 import { parseTexToTSAExam, validateTSAExamData } from '@/services/tsaParserService'
 import { buildDefaultPointsConfig } from '@/services/tsaScoringService'
+import { shuffleExamForStudent } from '@/services/mergeExamsService'
 import { fmt } from '@/lib/helpers'
 import { supabase } from '@/lib/supabase'
 import Modal from '@/components/Modal'
@@ -74,16 +75,98 @@ create policy "allow_all_exam_rooms" on public.exam_rooms for all using (true) w
 create policy "allow_all_exam_subs" on public.exam_submissions for all using (true) with check (true);`
 
 export default function ExamMgmt() {
-  const { exams, loading, dbError, loadExams, createExam, deleteExam } = useExamStore()
+  const { exams, loading, dbError, loadExams, createExam, deleteExam, getExamData } = useExamStore()
   const [uploading, setUploading] = useState(false)
 
   // ── Tab: normal | tsa ──
   const [activeTab, setActiveTab] = useState<'normal' | 'tsa'>('normal')
 
+  // ── PDF Reader Modal state ──
+  const [pdfModalExam, setPdfModalExam] = useState<any>(null)
+  const [pdfModalData, setPdfModalData] = useState<any>(null)
+
   // ── TSA upload state ──
   const [tsaFile, setTsaFile] = useState<File | null>(null)
   const [tsaProgress, setTsaProgress] = useState<string[]>([])
   const [tsaParsing, setTsaParsing] = useState(false)
+
+  // ── 1. Đọc PDF / Xem đề thi dạng PDF ──
+  const handleOpenPdfReader = async (exam: any) => {
+    const toastId = toast.loading('Đang mở PDF đề thi...')
+    try {
+      const data = await getExamData(exam.id)
+      if (!data) throw new Error('Không lấy được dữ liệu đề thi')
+      setPdfModalExam(exam)
+      setPdfModalData(data)
+      toast.dismiss(toastId)
+    } catch (err: any) {
+      toast.error('Lỗi khi mở PDF: ' + (err.message || ''), { id: toastId })
+    }
+  }
+
+  // ── 2. Tải file đề thi về máy ──
+  const handleDownloadExamFile = async (exam: any) => {
+    const toastId = toast.loading('Đang chuẩn bị file tải về...')
+    try {
+      const data = await getExamData(exam.id)
+      if (!data) throw new Error('Không lấy được dữ liệu đề thi')
+
+      const questions = data.questions || []
+      let docContent = `=====================================================\n`
+      docContent += `   HỆ THỐNG GIÁO DỤC LỚP TOÁN THẦY LĨNH\n`
+      docContent += `   ĐỀ THI: ${(exam.title || '').toUpperCase()}\n`
+      docContent += `=====================================================\n\n`
+
+      questions.forEach((q: any, i: number) => {
+        docContent += `Câu ${q.number || i + 1}: ${(q.text || '').replace(/<[^>]+>/g, '')}\n`
+        if (q.options && q.options.length > 0) {
+          q.options.forEach((opt: any) => {
+            docContent += `  ${(opt.letter || 'A').toUpperCase()}. ${(opt.text || '').replace(/<[^>]+>/g, '')}\n`
+          })
+        }
+        if (q.correctAnswer) docContent += `-> Đáp án: ${q.correctAnswer}\n`
+        docContent += `-----------------------------------------------------\n`
+      })
+
+      const blob = new Blob([docContent], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${(exam.title || 'De_thi').replace(/\s+/g, '_')}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      toast.success('Đã tải đề thi về máy!', { id: toastId })
+    } catch (err: any) {
+      toast.error('Lỗi tải file: ' + (err.message || ''), { id: toastId })
+    }
+  }
+
+  // ── 3. Tạo đề tương tự (Đảo câu & đáp án) ──
+  const handleCreateSimilarExam = async (exam: any) => {
+    const toastId = toast.loading('Đang khởi tạo đề thi tương tự (Đảo câu & đáp án)...')
+    try {
+      const rawData = await getExamData(exam.id)
+      if (!rawData) throw new Error('Không lấy được dữ liệu đề thi gốc')
+
+      const shuffledData = shuffleExamForStudent(rawData)
+      const oldTitle = exam.title || 'Đề thi'
+      let newTitle = oldTitle
+      if (oldTitle.includes('ĐỀ 01') || oldTitle.includes('ĐỀ 1')) {
+        newTitle = oldTitle.replace(/ĐỀ (0?1)/i, 'ĐỀ 02')
+      } else {
+        newTitle = `[Đề tương tự] ${oldTitle}`
+      }
+
+      await createExam(shuffledData, newTitle)
+      toast.success(`🎉 Đã tạo đề tương tự "${newTitle}" thành công!`, { id: toastId })
+      loadExams()
+    } catch (err: any) {
+      toast.error('Lỗi tạo đề tương tự: ' + (err.message || ''), { id: toastId })
+    }
+  }
 
   // ── TSA preview state ──
   const [tsaPreview, setTsaPreview] = useState<{ data: any; id: string; title: string } | null>(null)
@@ -566,44 +649,74 @@ export default function ExamMgmt() {
                             {fmt(new Date(exam.created_at), 'dd/MM/yyyy HH:mm')}
                           </div>
 
-                          {/* Action Icon Row */}
-                          <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-gray-50 text-gray-400">
+                          {/* Action Icon Row - 6 Icons matching reference UI */}
+                          <div className="flex items-center justify-end gap-1 pt-1.5 border-t border-gray-100 text-gray-400">
+                            {/* Icon 1: Đọc PDF / Xem đề PDF (Rose) */}
+                            <button
+                              onClick={() => handleOpenPdfReader(exam)}
+                              className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Đọc PDF / Xem file đề"
+                            >
+                              <BookOpen className="w-3.5 h-3.5 text-rose-500" />
+                            </button>
+
+                            {/* Icon 2: Tải file về (Emerald) */}
+                            <button
+                              onClick={() => handleDownloadExamFile(exam)}
+                              className="p-1.5 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Tải đề thi về máy"
+                            >
+                              <Download className="w-3.5 h-3.5 text-emerald-600" />
+                            </button>
+
+                            {/* Icon 3: Tạo đề tương tự (Purple) */}
+                            <button
+                              onClick={() => handleCreateSimilarExam(exam)}
+                              className="p-1.5 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                              title="Tạo đề thi tương tự (Trộn câu & đáp án)"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                            </button>
+
+                            {/* Icon 4: Cấu hình điểm (Orange) */}
                             {!isTSA && (
                               <button
                                 onClick={() => handleOpenConfig(exam.id, exam.title)}
-                                className="p-1 hover:text-orange-500 hover:bg-orange-50 rounded transition"
+                                className="p-1.5 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
                                 title="Cấu hình điểm"
                               >
-                                <Settings className="w-3.5 h-3.5" />
+                                <Settings className="w-3.5 h-3.5 text-orange-500" />
                               </button>
                             )}
 
+                            {/* Icon 5: Xem trước & Chỉnh sửa (Blue) */}
                             {!isTSA ? (
                               <button
                                 onClick={() => handlePreview(exam.id, exam.title)}
                                 disabled={previewing === exam.id}
-                                className="p-1 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                                className="p-1.5 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Xem trước & Chỉnh sửa"
                               >
-                                {previewing === exam.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                                {previewing === exam.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5 text-blue-600" />}
                               </button>
                             ) : (
                               <button
                                 onClick={() => handlePreviewTSA(exam.id, exam.title)}
                                 disabled={tsaPreviewing === exam.id}
-                                className="p-1 hover:text-orange-600 hover:bg-orange-50 rounded transition"
+                                className="p-1.5 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                                 title="Xem trước & Chỉnh sửa đề TSA"
                               >
-                                {tsaPreviewing === exam.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                                {tsaPreviewing === exam.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5 text-blue-600" />}
                               </button>
                             )}
 
+                            {/* Icon 6: Xóa đề thi (Red) */}
                             <button
                               onClick={() => handleDelete(exam.id, exam.title)}
-                              className="p-1 hover:text-red-600 hover:bg-red-50 rounded transition"
+                              className="p-1.5 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Xóa đề thi"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
                             </button>
                           </div>
                         </div>
@@ -874,7 +987,6 @@ export default function ExamMgmt() {
           questionLabel={`Câu ${imageAttachTarget.number}`}
           currentImages={imageAttachTarget.images || []}
           onSave={async (imgs: AttachedImage[]) => {
-            // Cập nhật question trong previewData và lưu lên Supabase
             const updatedQuestions = previewData.questions.map((q: any) =>
               q.number === imageAttachTarget.number
                 ? { ...q, images: imgs }
@@ -892,6 +1004,79 @@ export default function ExamMgmt() {
           }}
         />
       )}
+
+      {/* ── MODAL ĐỌC PDF ĐỀ THI ── */}
+      <Modal
+        open={Boolean(pdfModalExam)}
+        onClose={() => setPdfModalExam(null)}
+        title={`📖 Đọc PDF Đề Thi: ${pdfModalExam?.title || ''}`}
+        size="2xl"
+      >
+        {pdfModalData && (
+          <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-2 custom-scrollbar">
+            {/* Header Đề thi */}
+            <div className="text-center pb-4 border-b-2 border-teal-600 bg-teal-50/60 p-5 rounded-2xl shadow-sm">
+              <h2 className="font-extrabold text-teal-950 text-lg uppercase tracking-wide">
+                {pdfModalExam?.title}
+              </h2>
+              <p className="text-xs text-teal-700 font-bold mt-1">
+                LỚP TOÁN THẦY LĨNH — HỆ THỐNG QUẢN LÝ ĐỀ THI
+              </p>
+            </div>
+
+            {/* Danh sách câu hỏi */}
+            <div className="space-y-4">
+              {(pdfModalData.questions || []).map((q: any, idx: number) => (
+                <div key={q.number || idx} className="p-4 bg-gray-50/80 border border-gray-200 rounded-2xl space-y-2.5">
+                  <div className="font-bold text-gray-900 text-sm flex items-start gap-2">
+                    <span className="text-teal-800 bg-teal-100 px-2.5 py-0.5 rounded-lg text-xs font-black shrink-0">
+                      Câu {q.number || idx + 1}:
+                    </span>
+                    <div className="flex-1">
+                      <MathText html={q.text} />
+                    </div>
+                  </div>
+
+                  {/* Lựa chọn A/B/C/D */}
+                  {q.options && q.options.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 pl-4">
+                      {q.options.map((opt: any) => (
+                        <div key={opt.letter} className="text-xs font-semibold text-gray-700 flex items-center gap-2 bg-white p-2 rounded-xl border border-gray-100 shadow-sm">
+                          <span className="w-5 h-5 rounded-full bg-teal-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                            {(opt.letter || 'A').toUpperCase()}
+                          </span>
+                          <MathText html={opt.text} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Đáp án đúng */}
+                  {q.correctAnswer && (
+                    <div className="pt-2 text-xs font-bold text-emerald-700 flex items-center gap-1.5 border-t border-gray-100 mt-2">
+                      <span>✓ Đáp án đúng:</span>
+                      <span className="bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-md font-black">{q.correctAnswer}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom action bar */}
+            <div className="flex justify-end gap-3 pt-3 border-t border-gray-100 sticky bottom-0 bg-white py-2">
+              <button
+                onClick={() => window.print()}
+                className="btn-teal flex items-center gap-1.5 text-xs py-2 px-4 shadow-sm"
+              >
+                <Printer className="w-4 h-4" /> In / Tải PDF
+              </button>
+              <button onClick={() => setPdfModalExam(null)} className="btn-outline text-xs px-5 py-2">
+                Đóng
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
