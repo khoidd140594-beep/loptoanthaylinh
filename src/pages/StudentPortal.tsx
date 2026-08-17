@@ -68,7 +68,7 @@ export default function StudentPortal() {
 
       setSubmissions(subData || [])
 
-      // 3. Tải tất cả các phòng thi hiện có để học sinh thấy bài được giao
+      // 3. Tải tất cả các phòng thi hiện có + tự động fetch chi tiết đề thi
       const { data: allRooms, error: roomsErr } = await supabase
         .from('exam_rooms')
         .select('*, exams(id, title, duration), classes(id, class_name)')
@@ -77,7 +77,28 @@ export default function StudentPortal() {
       if (roomsErr) {
         console.error('Lỗi tải phòng thi:', roomsErr)
       }
-      setExamRooms(allRooms || [])
+
+      // Đảm bảo thông tin đề thi luôn luôn có dữ liệu (Fallback nếu Supabase join bị trống)
+      let finalRooms = allRooms || []
+      if (finalRooms.length > 0) {
+        const examIds = Array.from(new Set(finalRooms.map(r => r.exam_id).filter(Boolean)))
+        if (examIds.length > 0) {
+          const { data: exData } = await supabase
+            .from('exams')
+            .select('id, title, duration')
+            .in('id', examIds)
+
+          if (exData && exData.length > 0) {
+            const exMap = new Map(exData.map(e => [e.id, e]))
+            finalRooms = finalRooms.map(r => ({
+              ...r,
+              exams: r.exams || exMap.get(r.exam_id) || null
+            }))
+          }
+        }
+      }
+
+      setExamRooms(finalRooms)
 
       // 4. Tải khóa học
       const { data: allCourses } = await supabase
