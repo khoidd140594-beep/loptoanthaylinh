@@ -607,13 +607,13 @@ export default function StudentPortal() {
           <div className="flex items-center gap-2 border-b-2 border-teal-600 pb-3">
             <BookOpen className="w-5 h-5 text-teal-600 stroke-[2.5]" />
             <h3 className="font-extrabold text-lg text-teal-900">
-              Bài Thi Chưa Làm ({examRooms.filter(r => r.status !== 'closed' && !submissions.some(s => s.room_id === r.id)).length})
+              Bài Thi Chưa Làm ({examRooms.filter(r => !submissions.some(s => s.room_id === r.id)).length})
             </h3>
           </div>
 
-          {examRooms.filter(r => r.status !== 'closed' && !submissions.some(s => s.room_id === r.id)).length > 0 ? (
+          {examRooms.filter(r => !submissions.some(s => s.room_id === r.id)).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {examRooms.filter(r => r.status !== 'closed' && !submissions.some(s => s.room_id === r.id)).map(room => (
+              {examRooms.filter(r => !submissions.some(s => s.room_id === r.id)).map(room => (
                 <div
                   key={room.id}
                   className="bg-white rounded-3xl border-2 border-teal-100/80 p-5 space-y-4 shadow-2xs hover:border-teal-300 transition-all flex flex-col justify-between"
