@@ -239,6 +239,37 @@ export async function testApiKey(
   }
 }
 
+// ─── Helper sửa lỗi JSON LaTeX của LLM ─────────────────────────────────────────
+function repairLlmJson(raw: string): any {
+  let clean = raw.replace(/```json/gi, '').replace(/```/gi, '').trim()
+  const firstBrace = clean.indexOf('{')
+  const lastBrace = clean.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    clean = clean.substring(firstBrace, lastBrace + 1)
+  }
+
+  // 1. Thử parse trực tiếp
+  try {
+    return JSON.parse(clean)
+  } catch (e) {
+    // 2. Sửa lỗi backslash đơn trong công thức LaTeX (\frac, \sqrt, \Rightarrow...)
+    const repaired = clean.replace(/\\/g, (match, offset, string) => {
+      const nextChar = string[offset + 1]
+      // Nếu là \" hoặc \\ thì giữ nguyên \
+      if (nextChar === '"' || nextChar === '\\') return '\\'
+      return '\\\\'
+    })
+
+    try {
+      return JSON.parse(repaired)
+    } catch (e2) {
+      // 3. Xóa bớt ký tự điều khiển ẩn và parse lần nữa
+      const stripped = repaired.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+      return JSON.parse(stripped)
+    }
+  }
+}
+
 // ─── Gọi API Gemini để sinh đề thi tương tự (Thay số & tạo bài toán mới) ───────
 export async function generateSimilarExamWithAI({
   examTitle,
@@ -284,6 +315,7 @@ Tạo 1 ĐỀ THI MỚI HOÀN TOÀN TƯƠNG TỰ đề thi gốc bằng cách:
 2. THAY ĐỔI TOÀN BỘ SỐ LIỆU, ĐẦU BÀI, THAY ĐỔI BỐI CẢNH để tạo nên các BÀI TOÁN MỚI HOÀN TOÀN.
 3. Tính toán lại CHÍNH XÁC kết quả, tạo nghiệm đẹp, tính lại đáp án đúng (A/B/C/D) và viết LỜI GIẢI CHI TIẾT từng bước.
 4. Mọi công thức Toán phải dùng LaTeX: bọc $...$ cho công thức trong dòng, và $$...$$ cho công thức riêng dòng.
+5. LƯU Ý QUAN TRỌNG VỀ JSON: Tất cả dấu gạch chéo ngược \\ trong LaTeX phải ghi kép thành \\\\ (ví dụ: \\\\frac{a}{b}, \\\\sqrt{x}).
 
 ĐỊNH DẠNG KẾT QUẢ TRẢ VỀ (CHỈ TRẢ VỀ JSON HỢP LỆ, KHÔNG MỞ ĐẦU HOẶC KẾT THÚC BẰNG BẤT KỲ VĂN BẢN NÀO KHÁC):
 {
@@ -355,8 +387,7 @@ Tạo 1 ĐỀ THI MỚI HOÀN TOÀN TƯƠNG TỰ đề thi gốc bằng cách:
   }
 
   onProgress?.("🔍 Đang tổng hợp đề thi mới...");
-  const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-  const parsed = JSON.parse(cleanJson);
+  const parsed = repairLlmJson(rawText);
 
   return {
     title: parsed.title || `[Đề thay số AI] ${examTitle}`,
