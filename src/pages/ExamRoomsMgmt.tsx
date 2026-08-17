@@ -47,8 +47,9 @@ export default function ExamRoomsMgmt() {
         // ✅ FIX: Reset cũng mặc định KHÔNG xáo trộn
         settings: { shuffle: false, allowRetry: false, publicAccess: false },
       })
-    } catch (e) {
-      toast.error('Lỗi khi mở phòng thi')
+    } catch (e: any) {
+      console.error('Lỗi mở phòng thi:', e)
+      toast.error('Lỗi khi mở phòng thi: ' + (e?.message || e?.details || ''))
     } finally {
       setSaving(false)
     }

@@ -49,15 +49,20 @@ export const useExamRoomStore = create<ExamRoomState>((set, get) => ({
     }
   },
 
-  createRoom: async (roomData) => {
-    let code = generateRoomCode()
-    const { data: { user } } = await supabase.auth.getUser() 
+  createRoom: async (roomData: any) => {
+    const code = generateRoomCode()
     
-    const { error } = await supabase.from('exam_rooms').insert([{
-      ...roomData, // ✅ Lúc này roomData đã có sẵn settings bên trong
+    // Đảm bảo chỉ gửi các trường hợp lệ khớp với bảng exam_rooms trên Supabase
+    const payload: any = {
       code,
-      teacher_id: user?.id
-    }])
+      exam_id: roomData.exam_id,
+      class_id: roomData.class_id ? roomData.class_id : null,
+      status: roomData.status || 'waiting',
+      duration: roomData.time_limit || roomData.duration || 45,
+      settings: roomData.settings || {}
+    }
+
+    const { error } = await supabase.from('exam_rooms').insert([payload])
 
     if (error) {
       console.error('Lỗi tạo phòng:', error)
