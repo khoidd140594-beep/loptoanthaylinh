@@ -248,9 +248,14 @@ export default function StudentPortal() {
 
     // 1. Phân tích từng phòng thi xem thuộc Buổi mấy, Đề mấy
     examRooms.forEach(r => {
-      const roomTitle = (r.exams?.title || r.name || r.code || '').toLowerCase()
-      // Tìm số buổi trong tên (VD: buổi 1, buổi 01, buổi 14, b1...)
-      const sessionMatch = roomTitle.match(/buổi\s*(\d+)/i) || roomTitle.match(/\bb(\d+)\b/i) || roomTitle.match(/b\s*(\d+)/i)
+      // Lấy tất cả các nguồn tên có thể có: r.exams?.title, r.name, r.title, r.code
+      const roomTitle = `${r.exams?.title || ''} ${r.name || ''} ${r.title || ''} ${r.code || ''}`.toLowerCase()
+      
+      // Tìm số buổi trong tên (VD: buổi 1, buổi 01, buổi 14, b1, b14, buoi 1...)
+      const sessionMatch = roomTitle.match(/buổi\s*(\d+)/i) || 
+                           roomTitle.match(/buoi\s*(\d+)/i) || 
+                           roomTitle.match(/\bb(\d+)\b/i) || 
+                           roomTitle.match(/b\s*(\d+)/i)
       const sessionNum = sessionMatch ? parseInt(sessionMatch[1], 10) : null
 
       if (sessionNum !== null) {
@@ -259,13 +264,23 @@ export default function StudentPortal() {
         }
         const sObj = sessionMap.get(sessionNum)!
 
-        if (roomTitle.includes('đề 1') || roomTitle.includes('đề 01') || roomTitle.includes('đề1') || roomTitle.includes('đề - 01') || roomTitle.includes('đề - 1')) {
-          sObj.de1Room = r
-          matchedRoomIds.add(r.id)
-        } else if (roomTitle.includes('đề 2') || roomTitle.includes('đề 02') || roomTitle.includes('đề2') || roomTitle.includes('đề - 02') || roomTitle.includes('đề - 2')) {
+        // Kiểm tra đề 1 hay đề 2 (hỗ trợ đề 1, đề 01, de 1, de 01, đ1, d1, đề 2, đề 02...)
+        const isDe2 = roomTitle.includes('đề 2') || roomTitle.includes('đề 02') || roomTitle.includes('đề2') || 
+                      roomTitle.includes('de 2') || roomTitle.includes('de 02') || roomTitle.includes('de2') ||
+                      roomTitle.includes('đ2') || roomTitle.includes('d2')
+
+        const isDe1 = roomTitle.includes('đề 1') || roomTitle.includes('đề 01') || roomTitle.includes('đề1') || 
+                      roomTitle.includes('de 1') || roomTitle.includes('de 01') || roomTitle.includes('de1') ||
+                      roomTitle.includes('đ1') || roomTitle.includes('d1')
+
+        if (isDe2) {
           sObj.de2Room = r
           matchedRoomIds.add(r.id)
+        } else if (isDe1) {
+          sObj.de1Room = r
+          matchedRoomIds.add(r.id)
         } else {
+          // Nếu không rõ đề 1 hay 2: Ưu tiên gán vào Đề 1 trước, nếu Đề 1 đã có thì gán Đề 2
           if (!sObj.de1Room) {
             sObj.de1Room = r
             matchedRoomIds.add(r.id)
@@ -281,12 +296,12 @@ export default function StudentPortal() {
     const sessions: any[] = []
 
     // Đưa tất cả các buổi đã tìm thấy trong DB vào danh sách
-    const sessionNums = Array.from(sessionMap.keys()).sort((a, b) => b - a)
+    const foundNums = Array.from(sessionMap.keys()).sort((a, b) => b - a)
 
-    // Nếu có buổi tìm thấy thì hiện các buổi đó + các buổi mặc định 5,4,3,2,1 nếu chưa có
-    const finalSessionNums = Array.from(new Set([...sessionNums, 5, 4, 3, 2, 1])).sort((a, b) => b - a)
+    // Nếu không có buổi nào thì hiện mặc định 5,4,3,2,1; nếu có thì ghép lại và sort giảm dần
+    const allSessionNums = Array.from(new Set([...foundNums, 5, 4, 3, 2, 1])).sort((a, b) => b - a)
 
-    finalSessionNums.forEach(sessionNum => {
+    allSessionNums.forEach(sessionNum => {
       const sObj = sessionMap.get(sessionNum) || {}
       const de1Room = sObj.de1Room
       const de2Room = sObj.de2Room
@@ -316,12 +331,12 @@ export default function StudentPortal() {
       })
     })
 
-    // Gom các phòng thi còn lại (không ghi số buổi rõ ràng)
+    // Gom các phòng thi còn lại (nếu hoàn toàn không chứa chữ Buổi X)
     const otherRooms = examRooms.filter(r => !matchedRoomIds.has(r.id))
     if (otherRooms.length > 0) {
       sessions.unshift({
-        sessionNum: 999,
-        name: 'Bài thi giao trực tiếp',
+        sessionNum: 9999,
+        name: 'Bài thi khác',
         exams: otherRooms.map(r => {
           const sub = submissions.find(s => s.room_id === r.id)
           return {
