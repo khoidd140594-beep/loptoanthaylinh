@@ -152,20 +152,27 @@ export default function ExamRoomPage() {
         setAnswers(submission.answers || {})
       }
     } else {
-      const { data: newSub } = await supabase.from('exam_submissions').upsert({
-        room_id: roomData.id, student_id: currentStudent.id,
-        status: 'in_progress', answers: {},
-        // TSA: KHÔNG lưu toàn bộ exam data (có thể MB) — chỉ lưu exam_id
-        // Đề Word: lưu shuffled_exam để khôi phục đúng thứ tự câu
-        score_breakdown: isTSA
-          ? { exam_type: 'tsa', exam_id: examData.id }
-          : { shuffled_exam: finalExamData },
-      }, { onConflict: 'room_id,student_id' }).select('id').single()
+      const studentName = currentStudent.name || currentStudent.full_name || 'Học sinh';
+      const breakdownPayload = isTSA
+        ? { exam_type: 'tsa', exam_id: examData.id }
+        : { shuffled_exam: finalExamData };
+
+      const { data: newSub } = await supabase
+        .from('exam_submissions')
+        .insert([{
+          room_id: roomData.id,
+          student_id: currentStudent.id,
+          student_name: studentName,
+          status: 'in_progress',
+          answers: {},
+          score_breakdown: breakdownPayload,
+        }])
+        .select('id')
+        .maybeSingle()
 
       if (newSub?.id) {
         setSubmissionId(newSub.id)
       } else {
-        // 409 conflict hoặc lỗi khác → submission đã tồn tại → fetch lại
         const { data: existing } = await supabase.from('exam_submissions')
           .select('id').eq('room_id', roomData.id).eq('student_id', currentStudent.id).maybeSingle()
         if (existing?.id) setSubmissionId(existing.id)
@@ -296,6 +303,13 @@ export default function ExamRoomPage() {
     return <div className="min-h-screen flex items-center justify-center text-teal-600 font-bold">♻️ Đang tải dữ liệu...</div>
   }
 
+  const normalizedStudent = {
+    ...student,
+    name: student?.name || student?.full_name || 'Học sinh',
+    full_name: student?.full_name || student?.name || 'Học sinh',
+    className: student?.className || student?.class_name || '',
+  }
+
   // ── RENDER: Đề PDF ──────────────────────────────────────────────────────
   const isPdfExam = !!currentExamData.pdfUrl || !!currentExamData.pdfDriveUrl || !!currentExamData.pdfBase64
   if (isPdfExam) {
@@ -303,7 +317,7 @@ export default function ExamRoomPage() {
       <PDFExamRoom
         room={room}
         exam={{ ...currentExamData, id: exam.id, title: exam.title }}
-        student={student}
+        student={normalizedStudent}
         existingSubmissionId={submissionId}
         onSubmitted={setSubmittedResult}
         onExit={() => { sessionStorage.removeItem('current_student'); navigate('/thi') }}
@@ -313,17 +327,11 @@ export default function ExamRoomPage() {
 
   // ── RENDER: Đề TSA ──────────────────────────────────────────────────────
   if (currentExamData.exam_type === 'tsa') {
-    // Normalize student object: session lưu full_name, component dùng name
-    const tsaStudent = {
-      ...student,
-      name: student?.name || student?.full_name || 'Học sinh',
-      className: student?.className || '',
-    }
     return (
       <TSAExamRoom
         room={room}
         exam={{ ...currentExamData, id: exam.id, title: exam.title }}
-        student={tsaStudent}
+        student={normalizedStudent}
         existingSubmissionId={submissionId}
         initialAnswers={answers}
         onSubmitted={(result) => {
@@ -362,7 +370,7 @@ export default function ExamRoomPage() {
     <ExamRoom
       room={room}
       exam={{ ...currentExamData, id: exam.id, title: exam.title }}
-      student={student}
+      student={normalizedStudent}
       existingSubmissionId={submissionId}
       initialAnswers={answers}
       onSubmitted={setSubmittedResult}

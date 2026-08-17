@@ -120,9 +120,31 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ room, exam, student, existingSubmis
 
   const isSubmittingRef = useRef(false);
 
+  useEffect(() => {
+    if (existingSubmissionId) {
+      setSubmissionId(existingSubmissionId);
+    }
+  }, [existingSubmissionId]);
+
   const handleSubmit = useCallback(async (force = false, auto = false) => {
     if (!force && !showConfirmSubmit) { setShowConfirmSubmit(true); return; }
-    if (!exam || !submissionId || isSubmittingRef.current) return;
+    if (!exam || isSubmittingRef.current) return;
+
+    let currentSubId = submissionId || existingSubmissionId;
+    if (!currentSubId) {
+      try {
+        await ensureSignedIn();
+        currentSubId = await createSubmission({ roomId: room.id, roomCode: room.code, examId: exam.id, student });
+        if (currentSubId) setSubmissionId(currentSubId);
+      } catch (err) {
+        console.error('Lỗi khởi tạo submission khi nộp bài:', err);
+      }
+    }
+
+    if (!currentSubId) {
+      alert('Không thể kết nối đến máy chủ bài thi. Vui lòng kiểm tra lại mạng và thử lại!');
+      return;
+    }
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
@@ -142,7 +164,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ room, exam, student, existingSubmis
 
     try {
       const submission = await Promise.race([
-        submitExam(submissionId, userAnswers, exam, {
+        submitExam(currentSubId, userAnswers, exam, {
           tabSwitchCount,
           tabSwitchWarnings: safeWarnings as any,
           autoSubmitted: auto,
@@ -158,39 +180,40 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ room, exam, student, existingSubmis
           (breakdown.trueFalse?.correct || 0) +
           (breakdown.shortAnswer?.correct || 0);
 
+        const totalQ = exam.questions?.length || 0;
         const formatted = {
           ...submission,
           student,
           percentage: breakdown.percentage || 0,
           totalScore: submission.score || breakdown.totalScore || 0,
           correctCount: totalCorrect,
-          wrongCount: exam.questions.length - totalCorrect,
-          totalQuestions: exam.questions.length,
+          wrongCount: Math.max(0, totalQ - totalCorrect),
+          totalQuestions: totalQ,
           scoreBreakdown: breakdown,
-          answers: submission.answers
+          answers: submission.answers || userAnswers
         };
         onSubmitted(formatted);
       } else {
         console.warn('submitExam returned null');
-        alert('Khong the nop bai. Vui long thu lai.');
+        alert('Không thể nộp bài. Vui lòng thử lại.');
       }
     } catch (err: any) {
       console.error('Submit error:', err);
       if (err?.message === 'TIMEOUT') {
-        alert('Ket noi cham! Bai lam co the da duoc luu.\nHay bam "Nop bai" lai de kiem tra.');
+        alert('Kết nối chậm! Bài làm có thể đã được gửi.\nHãy bấm "Nộp bài" lại để kiểm tra.');
       } else {
         const msg = err?.message || err?.code || JSON.stringify(err);
-        alert('Loi nop bai: ' + msg + '\nVui long thu lai.');
+        alert('Lỗi nộp bài: ' + msg + '\nVui lòng thử lại.');
       }
     } finally {
-      // LUON mo khoa nut du thanh cong hay that bai
+      // LUÔN mở khóa nút dù thành công hay thất bại
       isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
-  }, [exam, submissionId, userAnswers, tabSwitchCount, tabSwitchWarnings, timeLeft]);
+  }, [exam, submissionId, existingSubmissionId, room, student, userAnswers, tabSwitchCount, tabSwitchWarnings, timeLeft, limit, showConfirmSubmit, onSubmitted]);
 
   const { reportTabSwitch, reportViolation, updateProgress, submitSession } = useExamSession({
-    roomId: room.id, studentId: student.id, studentName: student.name,
+    roomId: room.id, studentId: student.id, studentName: student.name || (student as any).full_name || 'Học sinh',
     sessionId: mySessionId, className: student.className, totalQuestions: exam?.questions?.length ?? 0,
     onKicked: (deviceInfo) => { setKickedByDevice(deviceInfo); setIsKicked(true); },
   });
@@ -201,11 +224,11 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ room, exam, student, existingSubmis
       try {
         await ensureSignedIn();
         const newId = await createSubmission({ roomId: room.id, roomCode: room.code, examId: exam.id, student });
-        setSubmissionId(newId);
+        if (newId) setSubmissionId(newId);
       } catch (err) { console.error('Error creating submission:', err); }
     };
     init();
-  }, []);
+  }, [existingSubmissionId, room.id, room.code, exam.id, student]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -345,7 +368,7 @@ const ExamRoom: React.FC<ExamRoomProps> = ({ room, exam, student, existingSubmis
             </div>
             <button
               onClick={() => { if (!isSubmitting) setShowConfirmSubmit(true); }}
-              disabled={isSubmitting || !submissionId}
+              disabled={isSubmitting}
               className={`flex items-center gap-2 px-5 py-2 rounded-full font-bold text-sm text-white shadow-lg transition-all ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 to-orange-500 hover:scale-105'}`}
             >
               {isSubmitting

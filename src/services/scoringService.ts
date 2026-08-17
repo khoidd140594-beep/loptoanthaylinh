@@ -71,7 +71,7 @@ export function detectSections(questions: Question[]): SectionPointsConfig[] {
   const sections: SectionPointsConfig[] = [];
   const sectionMap = new Map<string, { type: 'multiple_choice' | 'true_false' | 'short_answer'; count: number; part: number }>();
 
-  questions.forEach((q) => {
+  (questions || []).forEach((q) => {
     const part = Math.floor(Number(q.number) / 100) || 1;
     const mappedType = mapQuestionType(q.type || 'multiple_choice');
     const key = `part${part}`;
@@ -105,9 +105,10 @@ export function detectSections(questions: Question[]): SectionPointsConfig[] {
 }
 
 export function createDefaultPointsConfig(questions: Question[]): ExamPointsConfig {
-  const sections = detectSections(questions);
+  const safeQuestions = questions || [];
+  const sections = detectSections(safeQuestions);
   const maxScore = 10;
-  const totalQuestions = Math.max(questions.length, 1);
+  const totalQuestions = Math.max(safeQuestions.length, 1);
 
   sections.forEach((section) => {
     const ratio = section.totalQuestions / totalQuestions;
@@ -226,10 +227,10 @@ export function calculateScore(
   let tfPoints = 0, tfCount = 0;
   let saPoints = 0, saCount = 0;
 
-  exam.questions.forEach((q) => {
+  (exam?.questions || []).forEach((q) => {
     // ✅ FIX: dùng cả number và string key để lookup answers
     const qKey = String(q.number);
-    const userAnswer = answers[q.number] ?? answers[qKey];
+    const userAnswer = answers?.[q.number] ?? answers?.[qKey];
     const correctAnswer = q.correctAnswer;
     const { points: pointsPerQuestion, tfMode } = getQuestionPointsConfig(q, config);
     const mappedType = mapQuestionType(q.type || 'multiple_choice');

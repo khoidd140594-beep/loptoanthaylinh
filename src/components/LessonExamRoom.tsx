@@ -53,7 +53,7 @@ export default function LessonExamRoom({ examId, studentName, onSubmitted, onExi
   const handleSubmit = () => {
     let mcTotal = 0, mcCorrect = 0, tfTotal = 0, tfCorrect = 0, saTotal = 0, saCorrect = 0;
 
-    exam.questions.forEach((q: any) => {
+    (exam?.questions || []).forEach((q: any) => {
       const uAns = answers[q.number];
       if (q.type === 'multiple_choice') {
         mcTotal++; if (uAns && q.correctAnswer && uAns.toUpperCase() === q.correctAnswer.toUpperCase()) mcCorrect++;

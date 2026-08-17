@@ -213,10 +213,11 @@ const SolutionViewer: React.FC<SolutionViewerProps> = ({ solutionPdfUrl, solutio
 const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
   room, exam, student, existingSubmissionId, onSubmitted, onExit,
 }) => {
-  const mcQuestions = exam.questions.filter(q => q.type === 'multiple_choice');
-  const tfQuestions = exam.questions.filter(q => q.type === 'true_false');
-  const saQuestions = exam.questions.filter(q => q.type === 'short_answer');
-  const writingQuestions = exam.questions.filter(q => q.type === 'writing');
+  const questions = exam?.questions || [];
+  const mcQuestions = questions.filter(q => q.type === 'multiple_choice');
+  const tfQuestions = questions.filter(q => q.type === 'true_false');
+  const saQuestions = questions.filter(q => q.type === 'short_answer');
+  const writingQuestions = questions.filter(q => q.type === 'writing');
 
   const [mcAnswers, setMcAnswers] = useState<MCAnswers>({});
   const [tfAnswers, setTfAnswers] = useState<TFAnswers>({});
@@ -227,6 +228,12 @@ const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  useEffect(() => {
+    if (existingSubmissionId) {
+      setSubmissionId(existingSubmissionId);
+    }
+  }, [existingSubmissionId]);
 
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [tabWarnings, setTabWarnings] = useState<Date[]>([]);
@@ -283,7 +290,7 @@ const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
   const { reportTabSwitch, updateProgress, submitSession } = useExamSession({
     roomId: room.id,
     studentId: student.id,
-    studentName: student.name,
+    studentName: student.name || (student as any).full_name || 'Học sinh',
     sessionId: sessionIdRef.current,
     className: student.className,
     totalQuestions: totalQ,
@@ -299,22 +306,12 @@ const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
     const init = async () => {
       await ensureSignedIn();
       const id = await createSubmission({
-        roomId: room.id, roomCode: room.code, examId: exam.id, student, answers: {},
-        scoreBreakdown: {
-          multipleChoice: { total: 0, correct: 0, points: 0 },
-          trueFalse: { total: 0, correct: 0, partial: 0, points: 0, details: {} },
-          shortAnswer: { total: 0, correct: 0, points: 0 },
-          writing: { total: 0, correct: 0, points: 0, details: {} } as any,
-          totalScore: 0, percentage: 0,
-        },
-        totalScore: 0, percentage: 0, score: 0, correctCount: 0, wrongCount: 0,
-        totalQuestions: totalQ, tabSwitchCount: 0, tabSwitchWarnings: [], autoSubmitted: false,
-        duration: 0, status: 'in_progress',
+        roomId: room.id, roomCode: room.code, examId: exam.id, student,
       });
-      setSubmissionId(id);
+      if (id) setSubmissionId(id);
     };
     init().catch(console.error);
-  }, []);
+  }, [existingSubmissionId, room.id, room.code, exam.id, student]);
 
   // Timer
   useEffect(() => {
@@ -357,19 +354,36 @@ const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
   // Submit
   const handleSubmit = async (auto = false) => {
     if (isSubmitting || isSubmitted) return;
-    if (!submissionId) { alert('Lỗi phiên thi. Vui lòng thử lại.'); return; }
-    setIsSubmitting(true); setShowConfirm(false);
+
+    let currentSubId = submissionId || existingSubmissionId;
+    if (!currentSubId) {
+      try {
+        await ensureSignedIn();
+        currentSubId = await createSubmission({ roomId: room.id, roomCode: room.code, examId: exam.id, student });
+        if (currentSubId) setSubmissionId(currentSubId);
+      } catch (err) {
+        console.error('Lỗi tạo phiên thi PDF khi nộp bài:', err);
+      }
+    }
+
+    if (!currentSubId) {
+      alert('Không thể kết nối đến máy chủ bài thi. Vui lòng kiểm tra lại mạng và thử lại!');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setShowConfirm(false);
     submitSession();
     
     try {
       const merged = mergeAnswers(mcAnswers, tfAnswers, saAnswers, writingAnswers);
       const submission = await submitExam(
-        submissionId, merged, exam,
+        currentSubId, merged, exam,
         { 
           tabSwitchCount, 
           tabSwitchWarnings: tabWarnings, 
           autoSubmitted: auto,
-          duration: (limit * 60) - timeLeft // ✅ Đã sửa tính duration bằng biến limit
+          duration: (limit * 60) - timeLeft
         },
       );
       
@@ -390,17 +404,16 @@ const PDFExamRoom: React.FC<PDFExamRoomProps> = ({
           percentage: breakdown.percentage || 0,
           totalScore: submission.score || breakdown.totalScore || 0,
           correctCount: totalCorrect,
-          wrongCount: totalQ - totalCorrect,
+          wrongCount: Math.max(0, totalQ - totalCorrect),
           totalQuestions: totalQ,
-          // ✅ FIX 3: Truyền link PDF để ResultView hiển thị nút "Xem lại đề thi"
           examPdfUrl: pdfUrl || drivePdfUrl || undefined,
         };
 
         onSubmitted(formattedSubmission);
       }
-    } catch (err) {
-      console.error(err);
-      alert('Có lỗi khi nộp bài. Vui lòng thử lại.');
+    } catch (err: any) {
+      console.error('Submit error:', err);
+      alert('Có lỗi khi nộp bài: ' + (err.message || 'Vui lòng thử lại.'));
     } finally {
       setIsSubmitting(false);
     }

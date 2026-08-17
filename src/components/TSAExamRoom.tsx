@@ -137,6 +137,12 @@ const TSAExamRoom: React.FC<TSAExamRoomProps> = ({
   })
 
   useEffect(() => {
+    if (existingSubmissionId) {
+      setSubmissionId(existingSubmissionId)
+    }
+  }, [existingSubmissionId])
+
+  useEffect(() => {
     if (existingSubmissionId) return
     const init = async () => {
       try {
@@ -151,29 +157,44 @@ const TSAExamRoom: React.FC<TSAExamRoomProps> = ({
           }, { onConflict: 'id', ignoreDuplicates: true })
         }
 
-        const { data, error } = await supabase.from('exam_submissions').upsert({
-          room_id: room.id,
-          student_id: student.id,
-          status: 'in_progress',
-          answers: {},
-          score_breakdown: { exam_type: 'tsa', exam_id: exam.id },
-        }, { onConflict: 'room_id,student_id', ignoreDuplicates: false })
-          .select('id').single()
+        const { data: existing } = await supabase
+          .from('exam_submissions')
+          .select('id')
+          .eq('room_id', room.id)
+          .eq('student_id', student.id)
+          .maybeSingle()
 
-        if (data?.id) {
-          setSubmissionId(data.id)
+        if (existing?.id) {
+          setSubmissionId(existing.id)
+          return
+        }
+
+        const { data: newSub } = await supabase
+          .from('exam_submissions')
+          .insert([{
+            room_id: room.id,
+            student_id: student.id,
+            student_name: student.name || student.full_name || 'Học sinh',
+            status: 'in_progress',
+            answers: {},
+            score_breakdown: { exam_type: 'tsa', exam_id: exam.id },
+          }])
+          .select('id')
+          .maybeSingle()
+
+        if (newSub?.id) {
+          setSubmissionId(newSub.id)
         } else {
-          const { data: existing } = await supabase.from('exam_submissions')
+          const { data: retry } = await supabase.from('exam_submissions')
             .select('id').eq('room_id', room.id).eq('student_id', student.id).maybeSingle()
-          if (existing?.id) setSubmissionId(existing.id)
-          else console.error('TSA: không lấy được submission ID', error)
+          if (retry?.id) setSubmissionId(retry.id)
         }
       } catch (e) {
         console.error('Init submission error:', e)
       }
     }
     init()
-  }, []) // eslint-disable-line
+  }, [existingSubmissionId, room.id, student, exam.id])
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -205,18 +226,58 @@ const TSAExamRoom: React.FC<TSAExamRoomProps> = ({
   }, []) // eslint-disable-line
 
   const answeredTotal = useMemo(() =>
-    exam.questions.reduce((n, q) => n + (isAnswered(q, answers[q.id]) ? 1 : 0), 0),
-  [exam.questions, answers])
+    (exam?.questions || []).reduce((n: number, q: any) => n + (isAnswered(q, answers[q.id]) ? 1 : 0), 0),
+  [exam?.questions, answers])
 
   useEffect(() => { if (!student.isGuest) updateProgress(answeredTotal, timeLeft) }, [answeredTotal, timeLeft])
 
   const handleSubmit = useCallback(async (force = false, auto = false) => {
     if (!force && !showConfirm) { setShowConfirm(true); return }
-    if (!submissionId) {
-      alert('⚠️ Chưa khởi tạo được phiên thi.\nVui lòng tải lại trang và thử lại.')
+    if (isSubmittingRef.current) return
+
+    let currentSubId = submissionId || existingSubmissionId
+    if (!currentSubId) {
+      try {
+        if (!student.isGuest) await ensureSignedIn()
+        const { data: existing } = await supabase
+          .from('exam_submissions')
+          .select('id')
+          .eq('room_id', room.id)
+          .eq('student_id', student.id)
+          .maybeSingle()
+
+        if (existing?.id) {
+          currentSubId = existing.id
+          setSubmissionId(existing.id)
+        } else {
+          const { data: inserted } = await supabase
+            .from('exam_submissions')
+            .insert([{
+              room_id: room.id,
+              student_id: student.id,
+              student_name: student.name || student.full_name || 'Học sinh',
+              status: 'in_progress',
+              answers: pendingAnswers.current,
+              score_breakdown: { exam_type: 'tsa', exam_id: exam.id },
+            }])
+            .select('id')
+            .maybeSingle()
+
+          if (inserted?.id) {
+            currentSubId = inserted.id
+            setSubmissionId(inserted.id)
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi khởi tạo TSA submission:', err)
+      }
+    }
+
+    if (!currentSubId) {
+      alert('Không thể kết nối đến máy chủ bài thi. Vui lòng kiểm tra lại kết nối mạng!')
       return
     }
-    if (isSubmittingRef.current) return
+
     isSubmittingRef.current = true
     setIsSubmitting(true)
     setShowConfirm(false)
@@ -233,14 +294,20 @@ const TSAExamRoom: React.FC<TSAExamRoomProps> = ({
         score_breakdown: {
           exam_type: 'tsa', exam_id: exam.id, autoSubmitted: auto, pending_score: true,
         }
-      }).eq('id', submissionId)
+      }).eq('id', currentSubId)
         .select('id, answers, status, submitted_at, duration, tab_switches, score_breakdown')
-        .single()
+        .maybeSingle()
+
       if (error) throw error
+
       onSubmitted({
-        id: submissionId, ...(data ?? {}), student,
-        totalScore: 0, percentage: 0, correctCount: 0,
-        totalQuestions: exam.totalQuestions,
+        id: currentSubId,
+        ...(data ?? {}),
+        student,
+        totalScore: 0,
+        percentage: 0,
+        correctCount: 0,
+        totalQuestions: exam.totalQuestions || exam.questions?.length || 0,
         scoreBreakdown: data?.score_breakdown ?? { exam_type: 'tsa', pending_score: true },
         answers: data?.answers ?? pendingAnswers.current,
         pending_score: true,
@@ -252,7 +319,7 @@ const TSAExamRoom: React.FC<TSAExamRoomProps> = ({
       isSubmittingRef.current = false
       setIsSubmitting(false)
     }
-  }, [submissionId, timeLeft, tabCount, showConfirm, exam, student, limit])
+  }, [submissionId, existingSubmissionId, timeLeft, tabCount, showConfirm, exam, student, limit, room.id, onSubmitted])
 
   useEffect(() => { handleSubmitRef.current = handleSubmit }, [handleSubmit])
 
