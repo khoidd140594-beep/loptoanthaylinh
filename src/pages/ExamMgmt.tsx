@@ -514,23 +514,25 @@ export default function ExamMgmt() {
               if (activeTab === 'normal' && isTSA) return false
 
               const title = (exam.title || '').toLowerCase()
-              const examGrade = (exam as any).grade || (exam.data as any)?.grade
-              
-              // Nếu có thuộc tính grade rõ ràng
-              if (examGrade) return Number(examGrade) === col.grade
+              const rawGrade = (exam as any).grade || (exam.data as any)?.grade
 
-              // Phân tích từ tiêu đề
-              if (title.includes(`k${col.grade}`) || title.includes(`khối ${col.grade}`) || title.includes(`lớp ${col.grade}`) || title.startsWith(`${col.grade}.`)) {
-                return true
+              if (rawGrade) {
+                return Number(rawGrade) === col.grade
               }
 
-              // Nếu đề số tự do (ví dụ 6.15.8 -> Khối 6, 8.05.1 -> Khối 8)
-              if (title.startsWith(`${col.grade}`)) return true
+              // Nhận diện khối từ tiêu đề: "toán 6", "khối 6", "lớp 6", "k6", "6."...
+              const detectGrade = () => {
+                for (const g of [6, 7, 8, 9, 10, 11, 12]) {
+                  const regex = new RegExp(`\\b(toán|khối|lớp|k)\\s*0?${g}\\b`, 'i')
+                  if (regex.test(title)) return g
+                }
+                for (const g of [6, 7, 8, 9, 10, 11, 12]) {
+                  if (title.startsWith(`${g}.`) || title.startsWith(`${g}-`) || title.startsWith(`${g}_`)) return g
+                }
+                return 6 // Mặc định nếu không có thông tin khối
+              }
 
-              // Mặc định phân bổ đều nếu không chứa số khối khác
-              if (col.grade === 6 && !title.includes('7') && !title.includes('8') && !title.includes('9')) return true
-              if (col.grade === 8 && (title.includes('8') || title.includes('buổi'))) return true
-              return false
+              return detectGrade() === col.grade
             })
 
             return (
